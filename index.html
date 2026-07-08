@@ -72,6 +72,7 @@
   .btn.primary{background:var(--accent); border-color:var(--accent); color:#06251c;}
   .btn.ghost{background:transparent;}
   .btn.sel{background:var(--accent2); border-color:var(--accent2); color:#052b30;}
+  .btn.rate{min-width:54px; justify-content:center; display:flex; flex:1;}
   .btnrow{display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;}
   .full{width:100%; justify-content:center; display:flex;}
 
@@ -297,14 +298,14 @@ const BLOCKS = [
   {id:'study', start:510, end:570, name:'Study — Online course', ico:'📚', kind:'study', tasks:[
     {id:'study', label:'Course session done'},
   ]},
-  {id:'office1', start:570, end:810, name:'Office work', ico:'💼', tasks:[
+  {id:'office1', start:570, end:810, name:'Office work', ico:'💼', kind:'office', tasks:[
     {id:'office-am', label:'Morning office block done'},
   ]},
   {id:'lunch', start:810, end:870, name:'Lunch + Walk', ico:'🍽️', tasks:[
     {id:'lunch', label:'Lunch'},
     {id:'lunch-walk', label:'Walk'},
   ]},
-  {id:'office2', start:870, end:1050, name:'Office work', ico:'💼', tasks:[
+  {id:'office2', start:870, end:1050, name:'Office work', ico:'💼', kind:'office', tasks:[
     {id:'office-pm', label:'Afternoon office block done'},
   ]},
   {id:'noscreen', start:1050, end:1230, name:'No screen · Desk clock', ico:'🌙', kind:'deskclock', tasks:[
@@ -421,13 +422,27 @@ function streak(){
 /* course helpers */
 function topCourse(){ return state.courses.find(c=>!c.done) || null; }
 function studyDoneToday(){ return isDone('study'); }
-function markStudy(){
+function markStudy(rating){
   if(studyDoneToday()) return;
-  const c=topCourse(); if(!c) return;
+  const idx=state.courses.findIndex(c=>!c.done); if(idx<0) return;
+  const c=state.courses[idx];
   c.days++; if(c.days>=c.total) c.done=true;
+  const t=today(); t.studyIdx=idx;
+  if(rating){ t.ratings=t.ratings||{}; t.ratings['study']=rating; }
   setDone('study', true);
   render();
 }
+function unmarkStudy(){
+  const t=today();
+  if(t.studyIdx!=null && state.courses[t.studyIdx]){
+    const c=state.courses[t.studyIdx]; c.done=false; c.days=Math.max(0,c.days-1); delete t.studyIdx;
+  }
+  if(t.ratings) delete t.ratings['study'];
+  setDone('study', false);
+  render();
+}
+function setRating(taskId,n){ const t=today(); t.ratings=t.ratings||{}; t.ratings[taskId]=n; if(!isDone(taskId)){ setDone(taskId,true); } else { save(); } render(); }
+function clearSession(taskId){ const t=today(); if(t.ratings) delete t.ratings[taskId]; setDone(taskId,false); render(); }
 function leetDoneToday(){ return isDone('leetcode'); }
 
 /* ============================ AUDIO / ALARM ============================ */
@@ -555,6 +570,7 @@ function renderActive(){
   // special views
   if(b.kind==='exercise'){ card.appendChild(exerciseView()); }
   else if(b.kind==='study'){ card.appendChild(studyView()); }
+  else if(b.kind==='office'){ card.appendChild(officeView(b, b.tasks[0].id)); }
   else if(b.kind==='leetcode'){ card.appendChild(leetView()); }
   else if(b.kind==='deskclock'){ card.appendChild(deskPromptView()); }
   else if(b.kind==='winddown'){ b.tasks.forEach(t=>card.appendChild(taskRow(t))); card.appendChild(mealsView()); }
@@ -599,23 +615,59 @@ function exerciseView(){
   return wrap;
 }
 
+function ratingButtons(taskId, onPick){
+  const t=today(); const cur=(t.ratings&&t.ratings[taskId])||0;
+  const rb=el('div','btnrow');
+  for(let n=1;n<=5;n++){ const b=el('button','btn rate'+(cur===n?' sel':''), String(n)); b.onclick=()=>onPick(n); rb.appendChild(b); }
+  return rb;
+}
+function notesField(taskId){
+  const wrap=el('div'); wrap.style.marginTop='12px';
+  const nl=el('label','muted small'); nl.textContent='Notes (optional)'; nl.style.display='block'; nl.style.marginBottom='6px';
+  wrap.appendChild(nl);
+  const ta=el('textarea'); ta.placeholder='What went well / what got in the way…';
+  const t=today(); ta.value=(t.snotes&&t.snotes[taskId])||'';
+  ta.oninput=()=>{ const tt=today(); tt.snotes=tt.snotes||{}; tt.snotes[taskId]=ta.value; save(); };
+  ta.onclick=(e)=>e.stopPropagation();
+  wrap.appendChild(ta);
+  return wrap;
+}
+function ratingPanel(taskId, opts){
+  opts=opts||{};
+  const done=isDone(taskId);
+  const wrap=el('div');
+  wrap.appendChild(el('div',null, done ? '<b>Session logged.</b> Productivity:' : '<b>How productive was this session?</b> <span class="muted small">— tap to log</span>'));
+  wrap.appendChild(ratingButtons(taskId, opts.onPick));
+  wrap.appendChild(el('div','muted small','1 = distracted · 5 = deep focus'));
+  wrap.appendChild(notesField(taskId));
+  if(done && opts.onUndo){ const u=el('button','btn ghost small','Undo session'); u.style.marginTop='10px'; u.onclick=opts.onUndo; wrap.appendChild(u); }
+  return wrap;
+}
 function studyView(){
   const wrap=el('div');
-  const c=topCourse();
-  if(!c){ wrap.appendChild(el('p','accent','🎉 All courses complete! Add more in ⚙️ Settings.')); return wrap; }
-  wrap.appendChild(el('div',null,'<b>Now studying:</b> '+esc(c.name)));
-  const bar=el('div','row'); bar.style.margin='12px 0';
-  const track=el('div','bar'); const fill=el('i'); fill.style.width=Math.round(100*c.days/c.total)+'%'; track.appendChild(fill);
-  bar.appendChild(track);
-  bar.appendChild(el('div','small muted','Day '+Math.min(c.days+ (studyDoneToday()?0:0), c.total)+' / '+c.total));
-  wrap.appendChild(bar);
-  const pend=state.courses.filter(x=>!x.done).length;
-  wrap.appendChild(el('div','muted small', pend+' course'+(pend===1?'':'s')+' pending in your queue.'));
   const done=studyDoneToday();
-  const btn=el('button','btn '+(done?'':'primary')+' full', done?'✅ Session logged for today':'Mark today\'s session done');
-  btn.style.marginTop='14px';
-  btn.onclick=()=>{ if(done){ toast('Come back tomorrow for the next session'); return;} markStudy(); };
-  wrap.appendChild(btn);
+  const t=today();
+  const c = (done && t.studyIdx!=null) ? state.courses[t.studyIdx] : topCourse();
+  if(!c){ wrap.appendChild(el('p','accent','🎉 All courses complete! Add more in ⚙️ Settings.')); }
+  else {
+    wrap.appendChild(el('div',null,'<b>'+(done?'Studied':'Now studying')+':</b> '+esc(c.name)));
+    const bar=el('div','row'); bar.style.margin='12px 0';
+    const track=el('div','bar'); const fill=el('i'); fill.style.width=Math.round(100*Math.min(c.days,c.total)/c.total)+'%'; track.appendChild(fill);
+    bar.appendChild(track);
+    bar.appendChild(el('div','small muted','Day '+Math.min(c.days,c.total)+' / '+c.total));
+    wrap.appendChild(bar);
+    const pend=state.courses.filter(x=>!x.done).length;
+    wrap.appendChild(el('div','muted small', pend+' course'+(pend===1?'':'s')+' pending in your queue.'));
+  }
+  wrap.appendChild(ratingPanel('study', {
+    onPick:(n)=>{ if(!studyDoneToday()) markStudy(n); else setRating('study',n); },
+    onUndo:unmarkStudy,
+  }));
+  return wrap;
+}
+function officeView(block, taskId){
+  const wrap=el('div');
+  wrap.appendChild(ratingPanel(taskId, { onPick:(n)=>setRating(taskId,n), onUndo:()=>clearSession(taskId) }));
   return wrap;
 }
 
@@ -715,8 +767,14 @@ function renderReport(){
       let mark = done? '✅' : (past? '❌' : '⬜');
       const r=el('div','kv');
       r.appendChild(el('span',null, mark+' '+esc(t.label)+(t.optional?' <span class="opt">optional</span>':'')));
-      if(t.id==='exercise' && today().exercise){ const o=EXERCISE_OPTIONS.find(x=>x.id===today().exercise); r.appendChild(el('span','muted small', o?o.label:'')); }
+      const meta=el('span','muted small'); let mt='';
+      if(t.id==='exercise' && today().exercise){ const o=EXERCISE_OPTIONS.find(x=>x.id===today().exercise); if(o) mt=o.label; }
+      const rt=today().ratings&&today().ratings[t.id];
+      if(rt){ mt=(mt?mt+' · ':'')+'⚡ '+rt+'/5'; }
+      meta.textContent=mt; r.appendChild(meta);
       wrap.appendChild(r);
+      const nt=today().snotes&&today().snotes[t.id];
+      if(nt){ const nr=el('div','muted small'); nr.style.padding='0 0 8px 26px'; nr.textContent='📝 '+nt; wrap.appendChild(nr); }
     });
     body.appendChild(wrap);
   });
