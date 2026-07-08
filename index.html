@@ -189,13 +189,12 @@
   </div>
 </div>
 
-<!-- Session-start chime banner -->
+<!-- End-of-session wrap-up review (+ announces next session) -->
 <div class="overlay" id="sessionOverlay">
-  <div class="card alarmcard">
-    <div style="font-size:54px" id="sessIco">🔔</div>
-    <div class="muted" id="sessTime"></div>
-    <h2 style="margin:6px 0 4px" id="sessName">Next session</h2>
-    <p class="muted small" style="margin:2px 0 0">A new part of your day is starting.</p>
+  <div class="card alarmcard" style="text-align:left">
+    <div style="font-size:44px; text-align:center" id="sessIco">🔔</div>
+    <div id="sessReview"></div>
+    <div id="sessNext" class="muted small" style="text-align:center; margin-top:14px"></div>
     <div class="btnrow" style="justify-content:center; margin-top:16px">
       <button class="btn ghost" id="sessDismiss">Dismiss</button>
       <button class="btn primary" id="sessGo">Let's go →</button>
@@ -400,7 +399,7 @@ let state = load();
 let ui = { screen:'main', selectedBlock:null, override:null };
 let alarm = { active:false, snoozeUntil:0, test:false };
 let audioCtx=null, beepTimer=null, wakeLock=null, sessionTarget=null;
-let lastBlockId=null, lastDeskState=false, notifiedBlocks=new Set();
+let lastBlockId=null, lastDeskState=false, notifiedBlocks=new Set(), reviewPrev=null, reviewNext=null;
 
 function todayKey(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 
@@ -572,22 +571,51 @@ function sessionChime(){
   chime(); try{navigator.vibrate&&navigator.vibrate([250,120,250]);}catch(e){}
   let n=1; const iv=setInterval(()=>{ if(n++>=3 || !$('#sessionOverlay').classList.contains('on')){ clearInterval(iv); return; } chime(); }, 1500);
 }
-function showSessionAlarm(b){
-  sessionTarget=b.id;
-  $('#sessIco').textContent=b.ico;
-  $('#sessTime').textContent=fmtMin(b.start)+' – '+fmtMin(b.end);
-  $('#sessName').textContent=b.name;
+// End-of-session review: when a block ends, show what was part of it so
+// missed items can be ticked off, then announce the next session (with a chime).
+function openSessionReview(prev, next){
+  reviewPrev=prev; reviewNext=next; sessionTarget=next?next.id:null;
+  buildReview();
   $('#sessionOverlay').classList.add('on');
   sessionChime();
-  notify('Now: '+b.name, b.ico+' '+fmtMin(b.start)+' – '+fmtMin(b.end));
+  const done=prev.tasks.filter(t=>!t.optional&&isDone(t.id)).length;
+  const total=prev.tasks.filter(t=>!t.optional).length;
+  notify(prev.name+' wrapped up — '+done+'/'+total+' done', next? ('Next: '+next.name) : '');
+}
+function buildReview(){
+  const prev=reviewPrev, next=reviewNext; if(!prev) return;
+  $('#sessIco').textContent=prev.ico;
+  const review=$('#sessReview'); review.innerHTML='';
+  const done=prev.tasks.filter(t=>!t.optional&&isDone(t.id)).length;
+  const total=prev.tasks.filter(t=>!t.optional).length;
+  const h=el('h2'); h.style.textAlign='center'; h.style.margin='6px 0 2px'; h.textContent=prev.name+' — wrap-up'; review.appendChild(h);
+  const sub=el('p','muted small'); sub.style.textAlign='center'; sub.style.margin='0 0 10px';
+  sub.textContent = total ? (done+' of '+total+' done'+(done<total?' · tick anything you finished':' · nice work! 🎉')) : 'Session complete';
+  review.appendChild(sub);
+  prev.tasks.forEach(t=>{
+    const row=el('div','task'+(isDone(t.id)?' done':''));
+    const chk=el('button','check', isDone(t.id)?'✓':''); row.appendChild(chk);
+    const lab=el('div','label'); lab.textContent=t.label; if(t.optional) lab.appendChild(el('span','opt','optional')); row.appendChild(lab);
+    row.onclick=()=>{
+      const id=t.id, nd=!isDone(id);
+      if(id==='study'){ if(nd) markStudy(); else unmarkStudy(); }
+      else setDone(id, nd);
+      buildReview(); render();
+    };
+    review.appendChild(row);
+  });
+  if(next){ $('#sessNext').textContent='Up next: '+next.ico+' '+next.name+' · '+fmtMin(next.start)+'–'+fmtMin(next.end); $('#sessNext').style.display=''; $('#sessGo').style.display=''; }
+  else { $('#sessNext').style.display='none'; $('#sessGo').style.display='none'; }
 }
 function checkBlockNotify(){
   const b=blockAt(nowMin());
   if(b.id!==lastBlockId){
-    // fire a chime + banner at each new session start (the 6 AM wake has its own dedicated alarm)
+    // at each transition, review the session that just ended + announce the next
+    // (skip when entering the 6 AM wake block — it has its own confirm-to-dismiss alarm)
     if(lastBlockId!==null && b.id!=='wake' && !notifiedBlocks.has(b.id+todayKey())){
       notifiedBlocks.add(b.id+todayKey());
-      showSessionAlarm(b);
+      const prev=BLOCKS.find(x=>x.id===lastBlockId) || b;
+      openSessionReview(prev, b);
     }
     lastBlockId=b.id;
   }
