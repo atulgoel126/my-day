@@ -2,7 +2,7 @@
 
 A single-page web app that walks Atul through the day, block by block, and counts every action completed. Built to run always-on on a plugged-in Android tablet.
 
-**Live:** https://atulgoel126.github.io/my-day/
+**Live:** https://atulgoel.me/my-day/
 
 ## Put it on the tablet
 1. Open the live link in Chrome on the tablet.
