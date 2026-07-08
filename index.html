@@ -392,7 +392,14 @@ const DEFAULT_COURSES = [
   {name:'Course 5', total:10, days:0, done:false},
 ];
 
-const LEETCODE_LIST = ['Two Sum','Valid Parentheses','Merge Intervals','LRU Cache','Number of Islands'];
+// Loaded from leetcode.json at startup; this is the offline fallback. Edit leetcode.json to change the list.
+let LEETCODE_LIST = [
+  {title:'Two Sum', difficulty:'Easy', topic:'Array / Hash', url:'https://leetcode.com/problems/two-sum/'},
+  {title:'Valid Parentheses', difficulty:'Easy', topic:'Stack', url:'https://leetcode.com/problems/valid-parentheses/'},
+  {title:'Merge Intervals', difficulty:'Medium', topic:'Sorting', url:'https://leetcode.com/problems/merge-intervals/'},
+  {title:'LRU Cache', difficulty:'Medium', topic:'Design', url:'https://leetcode.com/problems/lru-cache/'},
+  {title:'Number of Islands', difficulty:'Medium', topic:'Graph / BFS', url:'https://leetcode.com/problems/number-of-islands/'},
+];
 
 /* ============================ STATE ============================ */
 let state = load();
@@ -648,6 +655,7 @@ function updateClock(){
   $('#dateLabel').textContent = d.toLocaleDateString(undefined,{weekday:'long', month:'long', day:'numeric'});
   $('#dcNow').textContent = fmtClock(d);
   $('#dcDate').textContent = d.toLocaleDateString(undefined,{weekday:'long', month:'long', day:'numeric'});
+  $('#alarmClock').textContent = fmtClock(d); // keep the alarm overlay clock live too
 }
 function renderSummary(){
   const c=doneCount(), pct=pctToday();
@@ -782,7 +790,14 @@ function leetView(){
   const wrap=el('div');
   wrap.appendChild(el('p','muted small','Solve at least one from your list (full module coming later):'));
   const ul=el('div'); ul.style.margin='6px 0 12px';
-  LEETCODE_LIST.forEach(q=> ul.appendChild(el('div','courseitem','<span>🧩</span><span>'+esc(q)+'</span>')));
+  LEETCODE_LIST.forEach(q=>{
+    const item = (typeof q==='string') ? {title:q} : (q||{});
+    const title = item.title || '(untitled)';
+    const link = item.url ? '<a href="'+esc(item.url)+'" target="_blank" rel="noopener" style="color:var(--accent2)">'+esc(title)+'</a>' : esc(title);
+    const diff = item.difficulty ? ' <span class="opt">'+esc(item.difficulty)+'</span>' : '';
+    const topic = item.topic ? ' <span class="muted small">'+esc(item.topic)+'</span>' : '';
+    ul.appendChild(el('div','courseitem','<span>🧩</span><span>'+link+diff+topic+'</span>'));
+  });
   wrap.appendChild(ul);
   const done=leetDoneToday();
   const btn=el('button','btn '+(done?'':'primary')+' full', done?'✅ Solved today':'I solved at least one');
@@ -1005,8 +1020,16 @@ function tick(){
 }
 
 /* ============================ INIT ============================ */
+function loadLeetcode(){
+  if(typeof fetch!=='function') return;
+  fetch('leetcode.json',{cache:'no-store'})
+    .then(r=> r.ok ? r.json() : null)
+    .then(list=>{ if(Array.isArray(list) && list.length){ LEETCODE_LIST=list; const b=blockAt(nowMin()); if(b.kind==='leetcode' || ui.selectedBlock==='leetcode') render(); } })
+    .catch(()=>{});
+}
 bind();
 render();
+loadLeetcode();
 setInterval(tick, 1000);
 </script>
 </body>

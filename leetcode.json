@@ -1,0 +1,7 @@
+[
+  { "title": "Two Sum", "difficulty": "Easy", "topic": "Array / Hash", "url": "https://leetcode.com/problems/two-sum/" },
+  { "title": "Valid Parentheses", "difficulty": "Easy", "topic": "Stack", "url": "https://leetcode.com/problems/valid-parentheses/" },
+  { "title": "Merge Intervals", "difficulty": "Medium", "topic": "Sorting", "url": "https://leetcode.com/problems/merge-intervals/" },
+  { "title": "LRU Cache", "difficulty": "Medium", "topic": "Design", "url": "https://leetcode.com/problems/lru-cache/" },
+  { "title": "Number of Islands", "difficulty": "Medium", "topic": "Graph / BFS", "url": "https://leetcode.com/problems/number-of-islands/" }
+]
