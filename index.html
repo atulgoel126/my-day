@@ -1,0 +1,812 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0e1116">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>My Day</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
+<style>
+  :root{
+    --bg:#0e1116; --card:#171b22; --card2:#1e232c; --line:#262c36;
+    --text:#e6edf3; --muted:#8b949e; --accent:#34d399; --accent2:#22d3ee;
+    --amber:#fbbf24; --red:#f87171; --violet:#a78bfa;
+    --ring:#34d399;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; height:100%;}
+  body{
+    background:radial-gradient(1200px 800px at 70% -10%, #16202b 0%, var(--bg) 55%);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; overscroll-behavior:none;
+  }
+  #app{max-width:900px; margin:0 auto; padding:16px 16px 120px;}
+  .row{display:flex; gap:12px; align-items:center;}
+  .between{justify-content:space-between;}
+  .muted{color:var(--muted);}
+  .small{font-size:13px;}
+  .pill{font-size:12px; padding:3px 9px; border-radius:999px; background:var(--card2); color:var(--muted); border:1px solid var(--line);}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:18px; padding:18px; margin-bottom:14px;}
+  h1,h2,h3{margin:0;}
+  .clock{font-variant-numeric:tabular-nums; font-weight:700; letter-spacing:.5px;}
+
+  /* Header */
+  .topbar{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
+  .topbar .date{font-size:14px; color:var(--muted);}
+  .topbar .now{font-size:34px;}
+  .iconbtn{background:var(--card); border:1px solid var(--line); color:var(--text); width:44px; height:44px; border-radius:12px; font-size:18px; display:flex; align-items:center; justify-content:center;}
+  .iconbtn:active{transform:scale(.94);}
+
+  /* Summary */
+  .summary{display:flex; gap:18px; align-items:center;}
+  .ring{width:118px; height:118px; flex:0 0 auto;}
+  .ring .num{font-size:30px; font-weight:800;}
+  .stats{display:flex; gap:22px; flex-wrap:wrap;}
+  .stat .k{font-size:26px; font-weight:800;}
+  .stat .l{font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.6px;}
+  .accent{color:var(--accent);} .amber{color:var(--amber);} .violet{color:var(--violet);}
+
+  /* Active block */
+  .blockhead{display:flex; align-items:center; gap:12px; margin-bottom:6px;}
+  .blockhead .ico{font-size:26px;}
+  .blockhead .time{font-size:12px; color:var(--muted);}
+  .blockhead h2{font-size:20px;}
+  .nowtag{margin-left:auto; font-size:11px; font-weight:700; color:#06251c; background:var(--accent); padding:4px 10px; border-radius:999px;}
+
+  /* Task rows */
+  .task{display:flex; align-items:center; gap:14px; padding:14px 4px; border-bottom:1px solid var(--line);}
+  .task:last-child{border-bottom:none;}
+  .check{width:34px; height:34px; border-radius:10px; border:2px solid var(--line); background:transparent; flex:0 0 auto; display:flex; align-items:center; justify-content:center; font-size:20px; color:transparent;}
+  .task.done .check{background:var(--accent); border-color:var(--accent); color:#06251c;}
+  .task .label{font-size:17px;}
+  .task.done .label{color:var(--muted); text-decoration:line-through;}
+  .task .opt{font-size:11px; color:var(--muted); border:1px solid var(--line); padding:1px 7px; border-radius:999px; margin-left:8px;}
+
+  .btn{border:1px solid var(--line); background:var(--card2); color:var(--text); padding:12px 16px; border-radius:12px; font-size:15px; font-weight:600;}
+  .btn:active{transform:scale(.97);}
+  .btn.primary{background:var(--accent); border-color:var(--accent); color:#06251c;}
+  .btn.ghost{background:transparent;}
+  .btn.sel{background:var(--accent2); border-color:var(--accent2); color:#052b30;}
+  .btnrow{display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;}
+  .full{width:100%; justify-content:center; display:flex;}
+
+  /* Timeline */
+  .tl{display:flex; flex-direction:column; gap:2px;}
+  .tli{display:flex; align-items:center; gap:12px; padding:11px 10px; border-radius:12px; border:1px solid transparent;}
+  .tli.cur{background:var(--card2); border-color:var(--line);}
+  .tli.sel{border-color:var(--accent2);}
+  .tli .t{font-size:12px; color:var(--muted); width:104px; flex:0 0 auto; font-variant-numeric:tabular-nums;}
+  .tli .nm{font-size:15px; flex:1;}
+  .tli .st{font-size:12px; color:var(--muted);}
+  .tli.complete .nm{color:var(--muted);}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--line);flex:0 0 auto;}
+  .dot.on{background:var(--accent);}
+  .dot.part{background:var(--amber);}
+  .dot.miss{background:var(--red);}
+
+  textarea, input[type=text]{width:100%; background:var(--card2); border:1px solid var(--line); color:var(--text); border-radius:12px; padding:12px; font-size:15px; font-family:inherit;}
+  textarea{min-height:70px; resize:vertical;}
+  .courseitem{display:flex; align-items:center; gap:12px; padding:10px 4px; border-bottom:1px solid var(--line);}
+  .courseitem:last-child{border-bottom:none;}
+  .bar{height:8px; background:var(--card2); border-radius:999px; overflow:hidden; flex:1;}
+  .bar>i{display:block; height:100%; background:var(--accent2);}
+
+  /* Overlays */
+  .overlay{position:fixed; inset:0; z-index:50; display:none; align-items:center; justify-content:center; padding:24px; background:rgba(5,8,12,.86); backdrop-filter:blur(6px);}
+  .overlay.on{display:flex;}
+  .alarmcard{max-width:520px; width:100%; text-align:center;}
+  .alarmcard .big{font-size:64px; font-weight:800; font-variant-numeric:tabular-nums;}
+  .pulse{animation:pulse 1s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{transform:scale(1)} 50%{transform:scale(1.06)}}
+
+  /* Desk clock mode */
+  #deskclock{position:fixed; inset:0; z-index:40; display:none; flex-direction:column; align-items:center; justify-content:center; background:var(--bg); padding:24px;}
+  #deskclock.on{display:flex;}
+  #deskclock .dcnow{font-size:clamp(70px,22vw,190px); font-weight:800; font-variant-numeric:tabular-nums; line-height:1;}
+  #deskclock .dcdate{font-size:18px; color:var(--muted); margin-top:6px;}
+  #deskclock .dcsummary{margin-top:26px; color:var(--muted); text-align:center; max-width:640px;}
+  #deskclock .dcstat{font-size:40px; font-weight:800; color:var(--accent);}
+  #deskclock .exit{position:fixed; top:16px; right:16px;}
+
+  /* Screens */
+  .screen{display:none;} .screen.on{display:block;}
+
+  .toast{position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:var(--card2); border:1px solid var(--line); color:var(--text); padding:12px 18px; border-radius:14px; z-index:60; box-shadow:0 10px 30px rgba(0,0,0,.4); display:none; max-width:90%;}
+  .toast.on{display:block;}
+
+  .gate{position:fixed; inset:0; z-index:80; display:flex; align-items:center; justify-content:center; padding:24px; background:var(--bg);}
+  .gate.off{display:none;}
+
+  .slider{width:100%;}
+  .kv{display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--line); font-size:14px;}
+  .foot{position:fixed; left:0; right:0; bottom:0; background:linear-gradient(transparent,var(--bg) 40%); padding:14px 16px 22px; display:flex; gap:10px; justify-content:center;}
+  .foot .btn{flex:1; max-width:220px; justify-content:center; display:flex;}
+</style>
+</head>
+<body>
+
+<!-- First-tap gate: unlock audio + wake lock + notifications -->
+<div class="gate" id="gate">
+  <div class="card" style="max-width:460px; text-align:center;">
+    <div style="font-size:40px">☀️</div>
+    <h2 style="margin:10px 0 6px">Good day, Atul</h2>
+    <p class="muted" style="margin:0 0 18px">Tap to start. This enables the alarm sound, keeps the screen awake, and turns on reminders.</p>
+    <button class="btn primary full" id="startBtn">Start my day</button>
+    <p class="muted small" style="margin-top:14px">Keep this tab open &amp; the tablet plugged in. Also set a native 6 AM Clock alarm as a backup.</p>
+  </div>
+</div>
+
+<!-- Alarm overlay -->
+<div class="overlay" id="alarmOverlay">
+  <div class="card alarmcard">
+    <div class="pulse" style="font-size:60px">⏰</div>
+    <div class="big" id="alarmClock">06:00</div>
+    <h2 style="margin:6px 0 4px">Time to get up</h2>
+    <p class="muted" id="alarmSub">The alarm won't stop until you confirm you're up.</p>
+    <div class="btnrow" style="justify-content:center; margin-top:18px">
+      <button class="btn ghost" id="snoozeBtn">Snooze 9 min</button>
+      <button class="btn primary" id="upBtn">✅ I'm up</button>
+    </div>
+  </div>
+</div>
+
+<!-- Reminder overlay -->
+<div class="overlay" id="remOverlay">
+  <div class="card alarmcard">
+    <div style="font-size:54px">📵</div>
+    <h2 style="margin:10px 0 4px" id="remTitle">Heads up</h2>
+    <p class="muted" id="remBody"></p>
+    <button class="btn primary" id="remOk" style="margin-top:14px">Got it</button>
+  </div>
+</div>
+
+<!-- Desk clock mode -->
+<div id="deskclock">
+  <button class="btn ghost exit" id="deskExit">Exit</button>
+  <div class="dcnow clock" id="dcNow">--:--</div>
+  <div class="dcdate" id="dcDate"></div>
+  <div class="dcsummary">
+    <div><span class="dcstat" id="dcCount">0</span> actions done &middot; <span id="dcPct">0%</span> of today</div>
+    <div id="dcMissed" style="margin-top:14px; font-size:14px"></div>
+    <div style="margin-top:18px; font-size:14px" class="amber">📵 No screen time — this is your wind-down. Just glance at the clock.</div>
+  </div>
+</div>
+
+<div id="app">
+  <!-- MAIN SCREEN -->
+  <div class="screen on" id="mainScreen">
+    <div class="topbar">
+      <div>
+        <div class="date" id="dateLabel">—</div>
+        <div class="now clock" id="nowLabel">--:--</div>
+      </div>
+      <div class="row">
+        <div class="pill" id="wlPill" title="screen wake lock">screen</div>
+        <button class="iconbtn" id="reportBtn" title="Report">📊</button>
+        <button class="iconbtn" id="settingsBtn" title="Settings">⚙️</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="summary">
+        <svg class="ring" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="52" fill="none" stroke="#262c36" stroke-width="12"/>
+          <circle id="ringFg" cx="60" cy="60" r="52" fill="none" stroke="var(--ring)" stroke-width="12" stroke-linecap="round" transform="rotate(-90 60 60)" stroke-dasharray="327" stroke-dashoffset="327"/>
+          <text x="60" y="58" text-anchor="middle" class="num" fill="#e6edf3" id="ringNum">0</text>
+          <text x="60" y="76" text-anchor="middle" font-size="11" fill="#8b949e">actions</text>
+        </svg>
+        <div class="stats">
+          <div class="stat"><div class="k accent" id="statPct">0%</div><div class="l">Today done</div></div>
+          <div class="stat"><div class="k amber" id="statStreak">0</div><div class="l">Day streak</div></div>
+          <div class="stat"><div class="k violet" id="statTotal">0</div><div class="l">Actions ever</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="activeCard"><!-- current block injected --></div>
+
+    <div class="card">
+      <div class="row between" style="margin-bottom:8px">
+        <h3 style="font-size:15px">Today's timeline</h3>
+        <button class="btn ghost small" id="followNow" style="padding:6px 12px">⟳ Now</button>
+      </div>
+      <div class="tl" id="timeline"></div>
+    </div>
+  </div>
+
+  <!-- REPORT SCREEN -->
+  <div class="screen" id="reportScreen">
+    <div class="topbar">
+      <h2>📊 Today's report</h2>
+      <button class="iconbtn" id="reportBack">✕</button>
+    </div>
+    <div class="card" id="reportBody"></div>
+  </div>
+
+  <!-- SETTINGS SCREEN -->
+  <div class="screen" id="settingsScreen">
+    <div class="topbar">
+      <h2>⚙️ Settings</h2>
+      <button class="iconbtn" id="settingsBack">✕</button>
+    </div>
+
+    <div class="card">
+      <h3 style="font-size:15px; margin-bottom:8px">Courses (study queue)</h3>
+      <p class="muted small" style="margin-top:0">Work the top pending course. Mark a session done each study block; ~10 sessions finishes a course, then it advances.</p>
+      <div id="courseEdit"></div>
+    </div>
+
+    <div class="card">
+      <h3 style="font-size:15px; margin-bottom:8px">Backup &amp; restore</h3>
+      <p class="muted small" style="margin-top:0">Your streak lives in this browser. Export regularly so it can never be lost.</p>
+      <div class="btnrow">
+        <button class="btn" id="exportBtn">⬇︎ Export data</button>
+        <button class="btn" id="importBtn">⬆︎ Import data</button>
+        <input type="file" id="importFile" accept="application/json" style="display:none">
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="font-size:15px; margin-bottom:8px">Preview a time (testing)</h3>
+      <p class="muted small" style="margin-top:0">Drag to see how each block looks. Does not change your real progress.</p>
+      <div class="row between small"><span id="ovLabel" class="clock">LIVE</span><button class="btn ghost small" id="ovReset" style="padding:6px 12px">Back to live</button></div>
+      <input type="range" min="0" max="1439" step="5" value="0" class="slider" id="ovSlider">
+    </div>
+
+    <div class="card">
+      <h3 style="font-size:15px; margin-bottom:8px">Danger zone</h3>
+      <div class="btnrow">
+        <button class="btn ghost" id="testAlarm">🔔 Test alarm</button>
+        <button class="btn ghost" id="resetToday" style="color:var(--amber)">Reset today</button>
+        <button class="btn ghost" id="wipeAll" style="color:var(--red)">Erase everything</button>
+      </div>
+    </div>
+    <div class="muted small" style="text-align:center; padding:10px">My Day &middot; v1 &middot; all data stays on this device</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================ CONFIG ============================ */
+const STORAGE_KEY = 'myday-v1';
+const SNOOZE_MS = 9*60*1000;
+
+const BLOCKS = [
+  {id:'wake', start:360, end:390, name:'Wake up', ico:'⏰', tasks:[
+    {id:'wake-up', label:'Confirm you are up'},
+    {id:'brush-am', label:'Brush teeth'},
+    {id:'water', label:'Drink a glass of water'},
+    {id:'biotic', label:'Take daily biotic shot'},
+    {id:'wash-face', label:'Wash face'},
+    {id:'supplements', label:'Take supplements'},
+  ]},
+  {id:'exercise', start:390, end:450, name:'Exercise', ico:'🏃', kind:'exercise', tasks:[
+    {id:'exercise', label:'Exercise done'},
+  ]},
+  {id:'morning', start:450, end:510, name:'Bath · Breakfast · Meditate', ico:'🚿', tasks:[
+    {id:'bathe', label:'Bathe'},
+    {id:'breakfast', label:'Breakfast'},
+    {id:'meditate', label:'Meditate', optional:true},
+  ]},
+  {id:'study', start:510, end:570, name:'Study — Online course', ico:'📚', kind:'study', tasks:[
+    {id:'study', label:'Course session done'},
+  ]},
+  {id:'office1', start:570, end:810, name:'Office work', ico:'💼', tasks:[
+    {id:'office-am', label:'Morning office block done'},
+  ]},
+  {id:'lunch', start:810, end:870, name:'Lunch + Walk', ico:'🍽️', tasks:[
+    {id:'lunch', label:'Lunch'},
+    {id:'lunch-walk', label:'Walk'},
+  ]},
+  {id:'office2', start:870, end:1050, name:'Office work', ico:'💼', tasks:[
+    {id:'office-pm', label:'Afternoon office block done'},
+  ]},
+  {id:'noscreen', start:1050, end:1230, name:'No screen · Desk clock', ico:'🌙', kind:'deskclock', tasks:[
+    {id:'no-screen', label:'Stayed off screen'},
+  ]},
+  {id:'leetcode', start:1230, end:1290, name:'LeetCode', ico:'🧩', kind:'leetcode', tasks:[
+    {id:'leetcode', label:'Solved at least one question'},
+  ]},
+  {id:'winddown', start:1290, end:1320, name:'Wind down', ico:'🛏️', kind:'winddown', tasks:[
+    {id:'brush-pm', label:'Brush teeth'},
+    {id:'plan-meals', label:"Plan tomorrow's meals"},
+    {id:'lay-clothes', label:'Lay out tomorrow’s clothes'},
+    {id:'set-alarm', label:'Set backstop 6 AM alarm'},
+    {id:'reflect', label:'Reflect / gratitude', optional:true},
+  ]},
+  {id:'sleep', start:1320, end:1440, name:'Sleep', ico:'😴', tasks:[
+    {id:'in-bed', label:'In bed, lights out'},
+  ]},
+];
+
+const EXERCISE_OPTIONS = [
+  {id:'trainer', label:'🏋️ With trainer'},
+  {id:'self', label:'💪 Self-exercise'},
+  {id:'walk', label:'🚶 Self-walk'},
+];
+
+const REMINDER = {min:1020, id:'noScreenSoon', title:'30 minutes left', body:'No-screen time starts at 5:30. Wrap up your screens.'};
+
+const WAKE_ALARM_WINDOW = [360, 450]; // audible auto-alarm only within [6:00, 7:30)
+
+const DEFAULT_COURSES = [
+  {name:'Course 1', total:10, days:0, done:false},
+  {name:'Course 2', total:10, days:0, done:false},
+  {name:'Course 3', total:10, days:0, done:false},
+  {name:'Course 4', total:10, days:0, done:false},
+  {name:'Course 5', total:10, days:0, done:false},
+];
+
+const LEETCODE_LIST = ['Two Sum','Valid Parentheses','Merge Intervals','LRU Cache','Number of Islands'];
+
+/* ============================ STATE ============================ */
+let state = load();
+let ui = { screen:'main', selectedBlock:null, override:null };
+let alarm = { active:false, snoozeUntil:0, test:false };
+let audioCtx=null, beepTimer=null, wakeLock=null;
+let lastBlockId=null, lastDeskState=false, notifiedBlocks=new Set();
+
+function todayKey(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+
+function load(){
+  let s=null;
+  try{ s=JSON.parse(localStorage.getItem(STORAGE_KEY)); }catch(e){}
+  if(!s) s={};
+  s.log = s.log || {};                       // { dateKey: { done:{id:ts}, ... } }
+  s.history = s.history || {};               // { dateKey: {count,total,pct} }
+  s.courses = s.courses || JSON.parse(JSON.stringify(DEFAULT_COURSES));
+  s.totalActions = s.totalActions || 0;
+  return s;
+}
+function save(){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){} }
+
+function today(){
+  const k=todayKey();
+  if(!state.log[k]) state.log[k]={done:{}, meals:'', exercise:null};
+  const t=state.log[k];
+  t.done=t.done||{};
+  return t;
+}
+
+/* ============================ TIME ============================ */
+function realNow(){ return new Date(); }
+function nowMin(){
+  if(ui.override!=null) return ui.override;
+  const d=new Date(); return d.getHours()*60+d.getMinutes();
+}
+function fmtMin(m){ m=((m%1440)+1440)%1440; const h=Math.floor(m/60), mm=m%60; const ap=h<12?'AM':'PM'; let hh=h%12; if(hh===0)hh=12; return hh+':'+String(mm).padStart(2,'0')+' '+ap; }
+function fmtClock(d){ let h=d.getHours(); const m=d.getMinutes(); const ap=h<12?'AM':'PM'; let hh=h%12; if(hh===0)hh=12; return hh+':'+String(m).padStart(2,'0')+' '+ap; }
+function blockAt(min){ for(const b of BLOCKS){ if(min>=b.start && min<b.end) return b; } return BLOCKS[BLOCKS.length-1]; }
+
+/* ============================ DERIVED ============================ */
+function allTasks(){ const out=[]; for(const b of BLOCKS) for(const t of b.tasks) out.push({block:b, ...t}); return out; }
+function countableTasks(){ return allTasks().filter(t=>!t.optional); }
+function isDone(id){ return !!today().done[id]; }
+function doneCount(){ const d=today().done; return countableTasks().filter(t=>d[t.id]).length + (d['reflect']?0:0); }
+function doneCountAll(){ const d=today().done; return Object.keys(d).length; }
+function totalCountable(){ return countableTasks().length; }
+function pctToday(){ const tot=totalCountable(); return tot? Math.round(100*doneCount()/tot):0; }
+
+function setDone(id, val){
+  const t=today();
+  const was=!!t.done[id];
+  if(val && !was){ t.done[id]=Date.now(); state.totalActions++; }
+  else if(!val && was){ delete t.done[id]; state.totalActions=Math.max(0,state.totalActions-1); }
+  snapshotToday();
+  save();
+}
+function snapshotToday(){
+  const k=todayKey();
+  state.history[k]={count:doneCount(), total:totalCountable(), pct:pctToday()};
+}
+function streak(){
+  // consecutive days (ending today or yesterday) with pct>=60
+  let s=0; const d=new Date();
+  for(let i=0;i<400;i++){
+    const k=todayKey(d);
+    const h=state.history[k];
+    if(i===0){ if(h && h.pct>=60) s++; }        // today counts only if already >=60
+    else { if(h && h.pct>=60) s++; else break; }
+    d.setDate(d.getDate()-1);
+  }
+  return s;
+}
+
+/* course helpers */
+function topCourse(){ return state.courses.find(c=>!c.done) || null; }
+function studyDoneToday(){ return isDone('study'); }
+function markStudy(){
+  if(studyDoneToday()) return;
+  const c=topCourse(); if(!c) return;
+  c.days++; if(c.days>=c.total) c.done=true;
+  setDone('study', true);
+  render();
+}
+function leetDoneToday(){ return isDone('leetcode'); }
+
+/* ============================ AUDIO / ALARM ============================ */
+function ensureAudio(){
+  if(!audioCtx){ try{ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
+  if(audioCtx && audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
+}
+function beep(){
+  if(!audioCtx) return;
+  try{
+    const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+    o.type='sine'; o.frequency.value=880;
+    g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.5, audioCtx.currentTime+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime+0.45);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime+0.5);
+  }catch(e){}
+}
+function startAlarm(test){
+  if(alarm.active) return;
+  alarm.active=true; alarm.test=!!test;
+  ensureAudio();
+  $('#alarmClock').textContent=fmtClock(realNow());
+  $('#alarmSub').textContent = test ? 'This is a test. Tap "I\'m up" to stop.' : "The alarm won't stop until you confirm you're up.";
+  $('#alarmOverlay').classList.add('on');
+  if(beepTimer) clearInterval(beepTimer);
+  const loop=()=>{ beep(); try{navigator.vibrate&&navigator.vibrate([400,200,400]);}catch(e){} };
+  loop(); beepTimer=setInterval(loop, 1300);
+}
+function stopAlarm(){
+  alarm.active=false; if(beepTimer){clearInterval(beepTimer); beepTimer=null;}
+  try{navigator.vibrate&&navigator.vibrate(0);}catch(e){}
+  $('#alarmOverlay').classList.remove('on');
+}
+function checkAlarm(){
+  const m=nowMin(), now=Date.now();
+  if(alarm.test) return;
+  const inWindow = m>=WAKE_ALARM_WINDOW[0] && m<WAKE_ALARM_WINDOW[1];
+  if(isDone('wake-up')){ if(alarm.active) stopAlarm(); return; }
+  if(inWindow){
+    if(now>=alarm.snoozeUntil && !alarm.active) startAlarm(false);
+  } else if(alarm.active){ stopAlarm(); }
+}
+
+/* ============================ REMINDERS / NOTIFY ============================ */
+function notify(title, body){
+  try{ if('Notification' in window && Notification.permission==='granted'){ new Notification(title,{body, silent:false}); } }catch(e){}
+}
+function checkReminder(){
+  const m=nowMin(); const t=today();
+  t._rem=t._rem||{};
+  if(m>=REMINDER.min && m<REMINDER.min+30 && !t._rem[REMINDER.id]){
+    t._rem[REMINDER.id]=Date.now(); save();
+    $('#remTitle').textContent=REMINDER.title; $('#remBody').textContent=REMINDER.body;
+    $('#remOverlay').classList.add('on');
+    notify(REMINDER.title, REMINDER.body);
+    try{navigator.vibrate&&navigator.vibrate([200,100,200]);}catch(e){}
+  }
+}
+function checkBlockNotify(){
+  const b=blockAt(nowMin());
+  if(b.id!==lastBlockId){
+    if(lastBlockId!==null && !notifiedBlocks.has(b.id+todayKey())){
+      notifiedBlocks.add(b.id+todayKey());
+      notify('Now: '+b.name, b.ico+' '+fmtMin(b.start)+' – '+fmtMin(b.end));
+    }
+    lastBlockId=b.id;
+  }
+}
+
+/* ============================ WAKE LOCK ============================ */
+async function requestWakeLock(){
+  try{
+    if('wakeLock' in navigator){ wakeLock=await navigator.wakeLock.request('screen'); $('#wlPill').textContent='awake'; $('#wlPill').style.color='var(--accent)'; wakeLock.addEventListener('release',()=>{ $('#wlPill').textContent='screen'; $('#wlPill').style.color=''; }); }
+    else { $('#wlPill').textContent='no lock'; }
+  }catch(e){ $('#wlPill').textContent='no lock'; }
+}
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'){ ensureAudio(); requestWakeLock(); } });
+
+/* ============================ RENDER ============================ */
+const $=(s)=>document.querySelector(s);
+const el=(t,c,h)=>{ const e=document.createElement(t); if(c)e.className=c; if(h!=null)e.innerHTML=h; return e; };
+
+function render(){
+  rollDay();
+  updateClock();
+  renderSummary();
+  renderActive();
+  renderTimeline();
+  renderDesk();
+}
+function updateClock(){
+  const d=realNow();
+  $('#nowLabel').textContent = ui.override!=null ? fmtMin(ui.override)+'  (preview)' : fmtClock(d);
+  $('#dateLabel').textContent = d.toLocaleDateString(undefined,{weekday:'long', month:'long', day:'numeric'});
+  $('#dcNow').textContent = fmtClock(d);
+  $('#dcDate').textContent = d.toLocaleDateString(undefined,{weekday:'long', month:'long', day:'numeric'});
+}
+function renderSummary(){
+  const c=doneCount(), pct=pctToday();
+  $('#ringNum').textContent=c;
+  $('#statPct').textContent=pct+'%';
+  $('#statStreak').textContent=streak();
+  $('#statTotal').textContent=state.totalActions;
+  const circ=2*Math.PI*52;
+  $('#ringFg').setAttribute('stroke-dasharray', circ.toFixed(0));
+  $('#ringFg').setAttribute('stroke-dashoffset', (circ*(1-pct/100)).toFixed(1));
+}
+
+function renderActive(){
+  const cur=blockAt(nowMin());
+  const b = ui.selectedBlock ? BLOCKS.find(x=>x.id===ui.selectedBlock) : cur;
+  const isCur = b.id===cur.id;
+  const card=$('#activeCard'); card.innerHTML='';
+  const head=el('div','blockhead');
+  head.appendChild(el('div','ico',b.ico));
+  const wrap=el('div'); wrap.style.flex='1';
+  wrap.appendChild(el('div','time',fmtMin(b.start)+' – '+fmtMin(b.end)));
+  wrap.appendChild(el('h2',null,b.name));
+  head.appendChild(wrap);
+  if(isCur) head.appendChild(el('div','nowtag','NOW'));
+  card.appendChild(head);
+
+  // special views
+  if(b.kind==='exercise'){ card.appendChild(exerciseView()); }
+  else if(b.kind==='study'){ card.appendChild(studyView()); }
+  else if(b.kind==='leetcode'){ card.appendChild(leetView()); }
+  else if(b.kind==='deskclock'){ card.appendChild(deskPromptView()); }
+  else if(b.kind==='winddown'){ b.tasks.forEach(t=>card.appendChild(taskRow(t))); card.appendChild(mealsView()); }
+  else { b.tasks.forEach(t=>card.appendChild(taskRow(t))); }
+
+  if(b.id==='wake' && !isDone('wake-up')){
+    const note=el('div','muted small'); note.style.marginTop='10px';
+    note.textContent='Tip: also keep a native 6 AM Clock alarm as a backup.';
+    card.appendChild(note);
+  }
+}
+
+function taskRow(t){
+  const done=isDone(t.id);
+  const row=el('div','task'+(done?' done':''));
+  const chk=el('button','check', done?'✓':'');
+  row.appendChild(chk);
+  const lab=el('div','label'); lab.textContent=t.label;
+  if(t.optional){ const o=el('span','opt','optional'); lab.appendChild(o); }
+  row.appendChild(lab);
+  row.onclick=()=>{ setDone(t.id, !isDone(t.id)); render(); };
+  return row;
+}
+
+function exerciseView(){
+  const wrap=el('div');
+  const t=today();
+  const p=el('p','muted small'); p.textContent='Pick how you moved today, then mark it done.'; p.style.marginTop='0';
+  wrap.appendChild(p);
+  const opts=el('div','btnrow');
+  EXERCISE_OPTIONS.forEach(o=>{
+    const b=el('button','btn'+(t.exercise===o.id?' sel':''), o.label);
+    b.onclick=()=>{ t.exercise=o.id; save(); render(); };
+    opts.appendChild(b);
+  });
+  wrap.appendChild(opts);
+  const done=isDone('exercise');
+  const btn=el('button','btn '+(done?'':'primary')+' full', done?'✅ Exercise done — undo?':'Mark exercise done');
+  btn.style.marginTop='14px';
+  btn.onclick=()=>{ if(!t.exercise){ toast('Pick an option first'); return;} setDone('exercise', !done); render(); };
+  wrap.appendChild(btn);
+  return wrap;
+}
+
+function studyView(){
+  const wrap=el('div');
+  const c=topCourse();
+  if(!c){ wrap.appendChild(el('p','accent','🎉 All courses complete! Add more in ⚙️ Settings.')); return wrap; }
+  wrap.appendChild(el('div',null,'<b>Now studying:</b> '+esc(c.name)));
+  const bar=el('div','row'); bar.style.margin='12px 0';
+  const track=el('div','bar'); const fill=el('i'); fill.style.width=Math.round(100*c.days/c.total)+'%'; track.appendChild(fill);
+  bar.appendChild(track);
+  bar.appendChild(el('div','small muted','Day '+Math.min(c.days+ (studyDoneToday()?0:0), c.total)+' / '+c.total));
+  wrap.appendChild(bar);
+  const pend=state.courses.filter(x=>!x.done).length;
+  wrap.appendChild(el('div','muted small', pend+' course'+(pend===1?'':'s')+' pending in your queue.'));
+  const done=studyDoneToday();
+  const btn=el('button','btn '+(done?'':'primary')+' full', done?'✅ Session logged for today':'Mark today\'s session done');
+  btn.style.marginTop='14px';
+  btn.onclick=()=>{ if(done){ toast('Come back tomorrow for the next session'); return;} markStudy(); };
+  wrap.appendChild(btn);
+  return wrap;
+}
+
+function leetView(){
+  const wrap=el('div');
+  wrap.appendChild(el('p','muted small','Solve at least one from your list (full module coming later):'));
+  const ul=el('div'); ul.style.margin='6px 0 12px';
+  LEETCODE_LIST.forEach(q=> ul.appendChild(el('div','courseitem','<span>🧩</span><span>'+esc(q)+'</span>')));
+  wrap.appendChild(ul);
+  const done=leetDoneToday();
+  const btn=el('button','btn '+(done?'':'primary')+' full', done?'✅ Solved today':'I solved at least one');
+  btn.onclick=()=>{ setDone('leetcode', !done); render(); };
+  wrap.appendChild(btn);
+  return wrap;
+}
+
+function deskPromptView(){
+  const wrap=el('div');
+  wrap.appendChild(el('p','muted','It\'s no-screen time. Enter desk-clock mode and step away from screens.'));
+  const row=el('div','btnrow');
+  const enter=el('button','btn primary','🌙 Enter desk clock');
+  enter.onclick=()=>enterDesk();
+  row.appendChild(enter);
+  const done=isDone('no-screen');
+  const b2=el('button','btn'+(done?' sel':''), done?'✅ Stayed off screen':'I stayed off screen');
+  b2.onclick=()=>{ setDone('no-screen', !done); render(); };
+  row.appendChild(b2);
+  wrap.appendChild(row);
+  return wrap;
+}
+
+function mealsView(){
+  const wrap=el('div'); wrap.style.marginTop='12px';
+  wrap.appendChild(el('label','muted small','Tomorrow\'s meals'));
+  const ta=el('textarea'); ta.placeholder='Breakfast / lunch / dinner...'; ta.value=today().meals||'';
+  ta.oninput=()=>{ today().meals=ta.value; save(); };
+  ta.onclick=(e)=>e.stopPropagation();
+  wrap.appendChild(ta);
+  return wrap;
+}
+
+function renderTimeline(){
+  const tl=$('#timeline'); tl.innerHTML='';
+  const curId=blockAt(nowMin()).id;
+  BLOCKS.forEach(b=>{
+    const total=b.tasks.filter(t=>!t.optional).length;
+    const done=b.tasks.filter(t=>!t.optional && isDone(t.id)).length;
+    const past = nowMin()>=b.end;
+    const item=el('div','tli'+(b.id===curId?' cur':'')+(b.id===ui.selectedBlock?' sel':'')+(done===total&&total>0?' complete':''));
+    let cls = done===total? 'on' : (done>0? 'part' : (past? 'miss':''));
+    item.appendChild(el('div','dot '+cls));
+    item.appendChild(el('div','t', fmtMin(b.start)+'–'+fmtMin(b.end)));
+    item.appendChild(el('div','nm', b.ico+' '+b.name));
+    item.appendChild(el('div','st', total? done+'/'+total : ''));
+    item.onclick=()=>{ ui.selectedBlock = (ui.selectedBlock===b.id? null : b.id); render(); window.scrollTo({top:0,behavior:'smooth'}); };
+    tl.appendChild(item);
+  });
+}
+
+/* ============================ DESK CLOCK ============================ */
+function renderDesk(){
+  const m=nowMin();
+  const shouldAuto = (blockAt(m).kind==='deskclock');
+  if($('#deskclock').classList.contains('on')){
+    $('#dcCount').textContent=doneCount();
+    $('#dcPct').textContent=pctToday()+'%';
+    const missed=missedList();
+    $('#dcMissed').innerHTML = missed.length? '<b>Still open:</b> '+missed.map(esc).join(' · ') : '✅ Everything so far is done — nice.';
+  }
+  if(shouldAuto && !lastDeskState && ui.override==null){ enterDesk(); }
+  lastDeskState=shouldAuto;
+}
+function enterDesk(){ $('#deskclock').classList.add('on'); renderDesk(); }
+function exitDesk(){ $('#deskclock').classList.remove('on'); }
+function missedList(){
+  const m=nowMin(); const out=[];
+  for(const b of BLOCKS){ if(m>=b.end){ for(const t of b.tasks){ if(!t.optional && !isDone(t.id)) out.push(t.label); } } }
+  return out;
+}
+
+/* ============================ REPORT ============================ */
+function renderReport(){
+  const body=$('#reportBody'); body.innerHTML='';
+  const m=nowMin();
+  body.appendChild(el('div','row between',''));
+  const head=el('div'); head.style.marginBottom='12px';
+  head.innerHTML='<div style="font-size:38px;font-weight:800" class="accent">'+doneCount()+' <span style="font-size:18px" class="muted">/ '+totalCountable()+' actions</span></div>'
+    +'<div class="muted">'+pctToday()+'% of today complete · '+state.totalActions+' actions all-time</div>';
+  body.appendChild(head);
+  BLOCKS.forEach(b=>{
+    const total=b.tasks.filter(t=>!t.optional).length; if(!total && !b.tasks.length) return;
+    const wrap=el('div'); wrap.style.margin='10px 0';
+    wrap.appendChild(el('div','muted small', fmtMin(b.start)+' – '+fmtMin(b.end)+' · '+b.ico+' '+b.name));
+    b.tasks.forEach(t=>{
+      const done=isDone(t.id);
+      const past=m>=b.end;
+      let mark = done? '✅' : (past? '❌' : '⬜');
+      const r=el('div','kv');
+      r.appendChild(el('span',null, mark+' '+esc(t.label)+(t.optional?' <span class="opt">optional</span>':'')));
+      if(t.id==='exercise' && today().exercise){ const o=EXERCISE_OPTIONS.find(x=>x.id===today().exercise); r.appendChild(el('span','muted small', o?o.label:'')); }
+      wrap.appendChild(r);
+    });
+    body.appendChild(wrap);
+  });
+}
+
+/* ============================ SETTINGS ============================ */
+function renderCourseEdit(){
+  const c=$('#courseEdit'); c.innerHTML='';
+  state.courses.forEach((co,i)=>{
+    const row=el('div','courseitem');
+    const inp=el('input'); inp.type='text'; inp.value=co.name; inp.style.flex='1';
+    inp.oninput=()=>{ co.name=inp.value; save(); };
+    row.appendChild(inp);
+    row.appendChild(el('div','small muted', co.done?'done':('day '+co.days+'/'+co.total)));
+    c.appendChild(row);
+  });
+}
+
+/* ============================ HELPERS ============================ */
+function esc(s){ return String(s).replace(/[&<>"]/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[x])); }
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),2200); }
+function showScreen(name){ ui.screen=name; ['main','report','settings'].forEach(s=>$('#'+s+'Screen').classList.toggle('on', s===name)); if(name==='report') renderReport(); if(name==='settings') renderCourseEdit(); }
+function rollDay(){
+  const k=todayKey();
+  if(state._day && state._day!==k){
+    // new day: reset per-day derived, keep courses/history/totals
+    lastBlockId=null; notifiedBlocks.clear();
+  }
+  state._day=k;
+  today(); // ensure exists
+  snapshotToday();
+}
+
+/* ============================ EVENTS ============================ */
+function bind(){
+  $('#startBtn').onclick=()=>{ ensureAudio(); requestWakeLock(); try{ if('Notification' in window && Notification.permission==='default') Notification.requestPermission(); }catch(e){} $('#gate').classList.add('off'); render(); };
+  $('#snoozeBtn').onclick=()=>{ alarm.snoozeUntil=Date.now()+SNOOZE_MS; if(alarm.test) alarm.test=false; stopAlarm(); toast('Snoozed 9 min'); };
+  $('#upBtn').onclick=()=>{ alarm.test=false; stopAlarm(); if(!isDone('wake-up')){ setDone('wake-up',true); } render(); toast('Good morning! ☀️'); };
+  $('#remOk').onclick=()=>$('#remOverlay').classList.remove('on');
+  $('#deskExit').onclick=exitDesk;
+  $('#reportBtn').onclick=()=>showScreen('report');
+  $('#reportBack').onclick=()=>showScreen('main');
+  $('#settingsBtn').onclick=()=>showScreen('settings');
+  $('#settingsBack').onclick=()=>{ showScreen('main'); render(); };
+  $('#followNow').onclick=()=>{ ui.selectedBlock=null; render(); };
+
+  // settings actions
+  $('#exportBtn').onclick=exportData;
+  $('#importBtn').onclick=()=>$('#importFile').click();
+  $('#importFile').onchange=importData;
+  $('#testAlarm').onclick=()=>{ ensureAudio(); startAlarm(true); showScreen('main'); };
+  $('#resetToday').onclick=()=>{ if(confirm('Reset all of today\'s check-ins?')){ const k=todayKey(); const meals=state.log[k]?.meals; const ex=state.log[k]?.exercise; state.log[k]={done:{}, meals:meals||'', exercise:ex||null}; snapshotToday(); save(); render(); toast('Today reset'); } };
+  $('#wipeAll').onclick=()=>{ if(confirm('Erase ALL data and streaks? This cannot be undone.')){ localStorage.removeItem(STORAGE_KEY); state=load(); render(); showScreen('main'); toast('All data erased'); } };
+
+  const sl=$('#ovSlider');
+  sl.oninput=()=>{ ui.override=parseInt(sl.value,10); $('#ovLabel').textContent=fmtMin(ui.override)+' (preview)'; render(); };
+  $('#ovReset').onclick=()=>{ ui.override=null; $('#ovLabel').textContent='LIVE'; render(); };
+
+  // any tap keeps audio alive
+  document.body.addEventListener('click', ()=>ensureAudio(), true);
+}
+
+function exportData(){
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='myday-backup-'+todayKey()+'.json'; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  toast('Backup downloaded');
+}
+function importData(e){
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{ const d=JSON.parse(r.result); if(d && d.log){ state=Object.assign(load(), d); save(); render(); showScreen('main'); toast('Data restored'); } else toast('Not a valid backup'); }catch(err){ toast('Could not read file'); } };
+  r.readAsText(f);
+  e.target.value='';
+}
+
+/* ============================ LOOP ============================ */
+function tick(){
+  updateClock();
+  if(ui.override==null){ checkAlarm(); checkReminder(); checkBlockNotify(); }
+  const cur=blockAt(nowMin()).id;
+  if(cur!==window._lastCur && ui.screen==='main' && !ui.selectedBlock){ window._lastCur=cur; render(); }
+  renderDesk();
+}
+
+/* ============================ INIT ============================ */
+bind();
+render();
+setInterval(tick, 1000);
+</script>
+</body>
+</html>
