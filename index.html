@@ -94,6 +94,11 @@
   textarea{min-height:70px; resize:vertical;}
   .courseitem{display:flex; align-items:center; gap:12px; padding:10px 4px; border-bottom:1px solid var(--line);}
   .courseitem:last-child{border-bottom:none;}
+  .leetrow{padding:12px 8px; border-bottom:1px solid var(--line); cursor:pointer;}
+  .leetrow:last-child{border-bottom:none;}
+  .leetrow:active{background:var(--card2);}
+  .leetrow .lt{font-size:16px; font-weight:600;}
+  .leetrow .lg{font-size:12px; color:var(--muted); margin-top:2px;}
   .bar{height:8px; background:var(--card2); border-radius:999px; overflow:hidden; flex:1;}
   .bar>i{display:block; height:100%; background:var(--accent2);}
 
@@ -199,6 +204,22 @@
       <button class="btn ghost" id="sessDismiss">Dismiss</button>
       <button class="btn primary" id="sessGo">Let's go →</button>
     </div>
+  </div>
+</div>
+
+<!-- LeetCode problem picker (dialog) -->
+<div class="overlay" id="leetPicker">
+  <div class="card" style="max-width:600px; width:100%; max-height:86vh; display:flex; flex-direction:column">
+    <div class="row between" style="margin-bottom:10px">
+      <h2 style="font-size:18px">🧩 Pick today's problem</h2>
+      <button class="iconbtn" id="leetClose">✕</button>
+    </div>
+    <div class="row" style="gap:8px; margin-bottom:10px">
+      <input type="text" id="leetSearch" placeholder="Search title or tag…" autocomplete="off">
+      <button class="btn" id="leetRandom" title="Surprise me">🎲</button>
+    </div>
+    <div id="leetList" style="overflow-y:auto; flex:1; min-height:0; -webkit-overflow-scrolling:touch"></div>
+    <div class="muted small" id="leetCount" style="margin-top:8px"></div>
   </div>
 </div>
 
@@ -334,6 +355,7 @@ const BLOCKS = [
     {id:'biotic', label:'Take daily biotic shot'},
     {id:'wash-face', label:'Wash face'},
     {id:'supplements', label:'Take supplements'},
+    {id:'b12', label:'Take vitamin B12 supplement'},
   ]},
   {id:'exercise', start:390, end:450, name:'Exercise', ico:'🏃', kind:'exercise', tasks:[
     {id:'exercise', label:'Exercise done'},
@@ -352,6 +374,7 @@ const BLOCKS = [
   {id:'lunch', start:810, end:870, name:'Lunch + Walk', ico:'🍽️', tasks:[
     {id:'lunch', label:'Lunch'},
     {id:'lunch-walk', label:'Walk'},
+    {id:'d3k2', label:'Take D3 + K2 supplement'},
   ]},
   {id:'office2', start:870, end:1050, name:'Office work', ico:'💼', kind:'office', tasks:[
     {id:'office-pm', label:'Afternoon office block done'},
@@ -367,6 +390,7 @@ const BLOCKS = [
     {id:'plan-meals', label:"Plan tomorrow's meals"},
     {id:'lay-clothes', label:'Lay out tomorrow’s clothes'},
     {id:'set-alarm', label:'Set backstop 6 AM alarm'},
+    {id:'magnesium', label:'Take magnesium supplement'},
     {id:'reflect', label:'Reflect / gratitude', optional:true},
   ]},
   {id:'sleep', start:1320, end:1440, name:'Sleep', ico:'😴', tasks:[
@@ -786,25 +810,60 @@ function officeView(block, taskId){
   return wrap;
 }
 
+function leetTagText(item){ return Array.isArray(item.tags)&&item.tags.length ? item.tags.join(' · ') : (item.topic||''); }
 function leetView(){
   const wrap=el('div');
-  wrap.appendChild(el('p','muted small','Solve at least one from your list (full module coming later):'));
-  const ul=el('div'); ul.style.margin='6px 0 12px';
-  LEETCODE_LIST.forEach(q=>{
-    const item = (typeof q==='string') ? {title:q} : (q||{});
-    const title = item.title || '(untitled)';
-    const link = item.url ? '<a href="'+esc(item.url)+'" target="_blank" rel="noopener" style="color:var(--accent2)">'+esc(title)+'</a>' : esc(title);
-    const diff = item.difficulty ? ' <span class="opt">'+esc(item.difficulty)+'</span>' : '';
-    const topic = item.topic ? ' <span class="muted small">'+esc(item.topic)+'</span>' : '';
-    ul.appendChild(el('div','courseitem','<span>🧩</span><span>'+link+diff+topic+'</span>'));
-  });
-  wrap.appendChild(ul);
-  const done=leetDoneToday();
-  const btn=el('button','btn '+(done?'':'primary')+' full', done?'✅ Solved today':'I solved at least one');
-  btn.onclick=()=>{ setDone('leetcode', !done); render(); };
-  wrap.appendChild(btn);
+  const pick=today().leetPick;
+  if(pick){
+    const done=leetDoneToday();
+    const tags=leetTagText(pick);
+    const link = pick.url ? '<a href="'+esc(pick.url)+'" target="_blank" rel="noopener" style="color:var(--accent2)">'+esc(pick.title)+' ↗</a>' : esc(pick.title);
+    let html='<div class="muted small">Today\'s problem</div>'
+      +'<div style="font-size:19px;font-weight:700;margin:2px 0">🧩 '+link+'</div>';
+    if(tags) html+='<div class="muted small" style="margin-bottom:8px">'+esc(tags)+'</div>';
+    if(pick.description) html+='<div style="margin-bottom:8px">'+esc(pick.description)+'</div>';
+    if(pick.example) html+='<div class="muted small" style="font-family:ui-monospace,monospace; white-space:pre-wrap; background:var(--card2); padding:10px; border-radius:10px">'+esc(pick.example)+'</div>';
+    wrap.appendChild(el('div',null,html));
+    const row=el('div','btnrow');
+    const solve=el('button','btn '+(done?'':'primary'), done?'✅ Solved today':'I solved it');
+    solve.onclick=()=>{ setDone('leetcode', !done); render(); };
+    const change=el('button','btn ghost','Change problem');
+    change.onclick=openLeetPicker;
+    row.appendChild(solve); row.appendChild(change);
+    wrap.appendChild(row);
+  } else {
+    wrap.appendChild(el('p','muted','Pick one problem to focus on this session.'));
+    const btn=el('button','btn primary full','🎯 Pick today\'s problem');
+    btn.onclick=openLeetPicker;
+    wrap.appendChild(btn);
+    wrap.appendChild(el('div','muted small',(LEETCODE_LIST.length||0)+' problems in your list'));
+  }
   return wrap;
 }
+function openLeetPicker(){ renderLeetList(''); $('#leetSearch').value=''; $('#leetPicker').classList.add('on'); setTimeout(()=>{try{$('#leetSearch').focus();}catch(e){}},60); }
+function closeLeetPicker(){ $('#leetPicker').classList.remove('on'); }
+function renderLeetList(q){
+  q=(q||'').toLowerCase().trim();
+  const list=$('#leetList'); list.innerHTML='';
+  let n=0;
+  LEETCODE_LIST.forEach(raw=>{
+    const item=(typeof raw==='string')?{title:raw}:(raw||{});
+    const tags=leetTagText(item);
+    const hay=((item.title||'')+' '+tags+' '+(item.difficulty||'')).toLowerCase();
+    if(q && hay.indexOf(q)<0) return;
+    n++;
+    const row=el('div','leetrow');
+    row.innerHTML='<div class="lt">'+esc(item.title||'(untitled)')+'</div>'+(tags?'<div class="lg">'+esc(tags)+'</div>':'');
+    row.onclick=()=>pickLeet(item);
+    list.appendChild(row);
+  });
+  $('#leetCount').textContent = n+' of '+LEETCODE_LIST.length+' shown';
+}
+function pickLeet(item){
+  today().leetPick={title:item.title, url:item.url, tags:item.tags, description:item.description, example:item.example};
+  save(); closeLeetPicker(); render();
+}
+function leetRandom(){ if(!LEETCODE_LIST.length) return; const raw=LEETCODE_LIST[Math.floor(Math.random()*LEETCODE_LIST.length)]; pickLeet((typeof raw==='string')?{title:raw}:raw); }
 
 function deskPromptView(){
   const wrap=el('div');
@@ -924,6 +983,7 @@ function renderReport(){
       if(t.id==='exercise' && today().exercise){ const o=EXERCISE_OPTIONS.find(x=>x.id===today().exercise); if(o) mt=o.label; }
       const rt=today().ratings&&today().ratings[t.id];
       if(rt){ mt=(mt?mt+' · ':'')+'⚡ '+rt+'/5'; }
+      if(t.id==='leetcode' && today().leetPick){ mt=(mt?mt+' · ':'')+today().leetPick.title; }
       meta.textContent=mt; r.appendChild(meta);
       wrap.appendChild(r);
       const nt=today().snotes&&today().snotes[t.id];
@@ -967,6 +1027,9 @@ function bind(){
   $('#snoozeBtn').onclick=()=>{ alarm.snoozeUntil=Date.now()+SNOOZE_MS; if(alarm.test) alarm.test=false; stopAlarm(); toast('Snoozed 9 min'); };
   $('#upBtn').onclick=()=>{ alarm.test=false; stopAlarm(); if(!isDone('wake-up')){ setDone('wake-up',true); } render(); toast('Good morning! ☀️'); };
   $('#remOk').onclick=()=>$('#remOverlay').classList.remove('on');
+  $('#leetClose').onclick=closeLeetPicker;
+  $('#leetRandom').onclick=leetRandom;
+  $('#leetSearch').oninput=(e)=>renderLeetList(e.target.value);
   $('#sessDismiss').onclick=()=>$('#sessionOverlay').classList.remove('on');
   $('#sessGo').onclick=()=>{ $('#sessionOverlay').classList.remove('on'); exitPlanner(); ui.selectedBlock=null; showScreen('main'); render(); };
   $('#deskExit').onclick=exitDesk;
