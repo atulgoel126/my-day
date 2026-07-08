@@ -114,6 +114,29 @@
   #deskclock .dcstat{font-size:40px; font-weight:800; color:var(--accent);}
   #deskclock .exit{position:fixed; top:16px; right:16px;}
 
+  /* Large-font desk planner */
+  #deskplanner{position:fixed; inset:0; z-index:45; display:none; flex-direction:column; background:radial-gradient(1200px 800px at 70% -10%, #16202b 0%, var(--bg) 55%); padding:clamp(18px,3vw,34px);}
+  #deskplanner.on{display:flex;}
+  #deskplanner .exit{position:fixed; top:16px; right:16px; z-index:2;}
+  #deskplanner .dphead{display:flex; align-items:center; gap:clamp(16px,4vw,42px); flex-wrap:wrap; margin-bottom:clamp(10px,2vw,20px); padding-right:90px;}
+  #deskplanner .dpclock{font-size:clamp(52px,11vw,120px); font-weight:800; line-height:.95;}
+  #deskplanner .dpmeta{font-size:clamp(16px,2.4vw,26px); color:var(--muted); line-height:1.5;}
+  #deskplanner .dpmeta #dpStats{color:var(--accent); font-weight:700;}
+  #deskplanner .dpcurrent{margin-bottom:clamp(10px,2vw,18px); background:var(--card); border:1px solid var(--line); border-radius:16px; padding:clamp(12px,2vw,20px);}
+  #deskplanner .dpcurname{font-size:clamp(20px,3.6vw,36px); font-weight:800; margin-bottom:10px;}
+  #deskplanner .dpcurbar{height:clamp(10px,1.6vw,18px); background:var(--card2); border-radius:999px; overflow:hidden;}
+  #deskplanner .dpcurbar>i{display:block; height:100%; background:linear-gradient(90deg,var(--accent2),var(--accent)); transition:width .5s ease;}
+  #deskplanner .dpcurtime{display:flex; justify-content:space-between; margin-top:8px; font-size:clamp(16px,2.6vw,28px); color:var(--muted); font-variant-numeric:tabular-nums;}
+  #deskplanner .dpcurtime b{color:var(--accent); font-weight:800;}
+  #deskplanner .dplist{flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:clamp(3px,.6vw,7px);}
+  #deskplanner .dprow{display:flex; align-items:center; gap:clamp(12px,2.5vw,26px); padding:clamp(8px,1.4vw,15px) clamp(10px,1.8vw,18px); border-radius:14px; border:1px solid transparent; font-size:clamp(18px,3vw,30px);}
+  #deskplanner .dprow.cur{background:var(--card2); border-color:var(--accent);}
+  #deskplanner .dprow.done .dpname{color:var(--muted);}
+  #deskplanner .dprow .dptime{color:var(--muted); width:clamp(150px,26vw,300px); flex:0 0 auto; font-variant-numeric:tabular-nums; font-size:.72em;}
+  #deskplanner .dprow .dpname{flex:1; font-weight:600;}
+  #deskplanner .dprow .dpstat{font-size:.66em; color:var(--muted);}
+  #deskplanner .dprow .dpnow{color:#06251c; background:var(--accent); font-size:.55em; padding:4px 12px; border-radius:999px; font-weight:800; letter-spacing:.5px;}
+
   /* Screens */
   .screen{display:none;} .screen.on{display:block;}
 
@@ -166,6 +189,20 @@
   </div>
 </div>
 
+<!-- Session-start chime banner -->
+<div class="overlay" id="sessionOverlay">
+  <div class="card alarmcard">
+    <div style="font-size:54px" id="sessIco">🔔</div>
+    <div class="muted" id="sessTime"></div>
+    <h2 style="margin:6px 0 4px" id="sessName">Next session</h2>
+    <p class="muted small" style="margin:2px 0 0">A new part of your day is starting.</p>
+    <div class="btnrow" style="justify-content:center; margin-top:16px">
+      <button class="btn ghost" id="sessDismiss">Dismiss</button>
+      <button class="btn primary" id="sessGo">Let's go →</button>
+    </div>
+  </div>
+</div>
+
 <!-- Desk clock mode -->
 <div id="deskclock">
   <button class="btn ghost exit" id="deskExit">Exit</button>
@@ -178,6 +215,17 @@
   </div>
 </div>
 
+<!-- Large-font desk planner view -->
+<div id="deskplanner">
+  <button class="btn ghost exit" id="planExit">✕ Exit</button>
+  <div class="dphead">
+    <div class="dpclock clock" id="dpClock">--:--</div>
+    <div class="dpmeta"><span id="dpDate"></span><br><span id="dpStats"></span></div>
+  </div>
+  <div class="dpcurrent" id="dpCurrent"></div>
+  <div class="dplist" id="dpList"></div>
+</div>
+
 <div id="app">
   <!-- MAIN SCREEN -->
   <div class="screen on" id="mainScreen">
@@ -188,6 +236,7 @@
       </div>
       <div class="row">
         <div class="pill" id="wlPill" title="screen wake lock">screen</div>
+        <button class="iconbtn" id="planBtn" title="Desk view (large font)">🖥️</button>
         <button class="iconbtn" id="reportBtn" title="Report">📊</button>
         <button class="iconbtn" id="settingsBtn" title="Settings">⚙️</button>
       </div>
@@ -350,7 +399,7 @@ const LEETCODE_LIST = ['Two Sum','Valid Parentheses','Merge Intervals','LRU Cach
 let state = load();
 let ui = { screen:'main', selectedBlock:null, override:null };
 let alarm = { active:false, snoozeUntil:0, test:false };
-let audioCtx=null, beepTimer=null, wakeLock=null;
+let audioCtx=null, beepTimer=null, wakeLock=null, sessionTarget=null;
 let lastBlockId=null, lastDeskState=false, notifiedBlocks=new Set();
 
 function todayKey(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -384,6 +433,7 @@ function nowMin(){
 function fmtMin(m){ m=((m%1440)+1440)%1440; const h=Math.floor(m/60), mm=m%60; const ap=h<12?'AM':'PM'; let hh=h%12; if(hh===0)hh=12; return hh+':'+String(mm).padStart(2,'0')+' '+ap; }
 function fmtClock(d){ let h=d.getHours(); const m=d.getMinutes(); const ap=h<12?'AM':'PM'; let hh=h%12; if(hh===0)hh=12; return hh+':'+String(m).padStart(2,'0')+' '+ap; }
 function blockAt(min){ for(const b of BLOCKS){ if(min>=b.start && min<b.end) return b; } return BLOCKS[BLOCKS.length-1]; }
+function fmtDur(m){ m=Math.max(0,Math.round(m)); if(m>=60){ const h=Math.floor(m/60), mm=m%60; return h+'h'+(mm?' '+mm+'m':''); } return m+' min'; }
 
 /* ============================ DERIVED ============================ */
 function allTasks(){ const out=[]; for(const b of BLOCKS) for(const t of b.tasks) out.push({block:b, ...t}); return out; }
@@ -503,12 +553,41 @@ function checkReminder(){
     try{navigator.vibrate&&navigator.vibrate([200,100,200]);}catch(e){}
   }
 }
+function chime(){
+  if(!audioCtx) return;
+  const notes=[659,880,1046];
+  notes.forEach((f,i)=>{
+    const t=audioCtx.currentTime+i*0.16;
+    const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+    o.type='sine'; o.frequency.value=f;
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.4,t+0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.34);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(t); o.stop(t+0.4);
+  });
+}
+function sessionChime(){
+  ensureAudio();
+  chime(); try{navigator.vibrate&&navigator.vibrate([250,120,250]);}catch(e){}
+  let n=1; const iv=setInterval(()=>{ if(n++>=3 || !$('#sessionOverlay').classList.contains('on')){ clearInterval(iv); return; } chime(); }, 1500);
+}
+function showSessionAlarm(b){
+  sessionTarget=b.id;
+  $('#sessIco').textContent=b.ico;
+  $('#sessTime').textContent=fmtMin(b.start)+' – '+fmtMin(b.end);
+  $('#sessName').textContent=b.name;
+  $('#sessionOverlay').classList.add('on');
+  sessionChime();
+  notify('Now: '+b.name, b.ico+' '+fmtMin(b.start)+' – '+fmtMin(b.end));
+}
 function checkBlockNotify(){
   const b=blockAt(nowMin());
   if(b.id!==lastBlockId){
-    if(lastBlockId!==null && !notifiedBlocks.has(b.id+todayKey())){
+    // fire a chime + banner at each new session start (the 6 AM wake has its own dedicated alarm)
+    if(lastBlockId!==null && b.id!=='wake' && !notifiedBlocks.has(b.id+todayKey())){
       notifiedBlocks.add(b.id+todayKey());
-      notify('Now: '+b.name, b.ico+' '+fmtMin(b.start)+' – '+fmtMin(b.end));
+      showSessionAlarm(b);
     }
     lastBlockId=b.id;
   }
@@ -742,6 +821,37 @@ function renderDesk(){
 }
 function enterDesk(){ $('#deskclock').classList.add('on'); renderDesk(); }
 function exitDesk(){ $('#deskclock').classList.remove('on'); }
+
+/* Large-font desk planner (full-day, glanceable) */
+function renderDeskPlanner(){
+  const d=realNow();
+  $('#dpClock').textContent=fmtClock(d);
+  $('#dpDate').textContent=d.toLocaleDateString(undefined,{weekday:'long', month:'long', day:'numeric'});
+  $('#dpStats').textContent=doneCount()+' / '+totalCountable()+' actions done · '+pctToday()+'%';
+  const cur=blockAt(nowMin());
+  const dur=cur.end-cur.start;
+  const elapsed=Math.min(dur, Math.max(0, nowMin()-cur.start));
+  const left=dur-elapsed;
+  const pctE=dur? Math.round(100*elapsed/dur):0;
+  $('#dpCurrent').innerHTML='<div class="dpcurname">'+cur.ico+' '+esc(cur.name)+'</div>'
+    +'<div class="dpcurbar"><i style="width:'+pctE+'%"></i></div>'
+    +'<div class="dpcurtime"><span>'+fmtDur(elapsed)+' elapsed</span><span><b>'+fmtDur(left)+' left</b></span></div>';
+  const curId=cur.id;
+  const list=$('#dpList'); list.innerHTML='';
+  BLOCKS.forEach(b=>{
+    const total=b.tasks.filter(t=>!t.optional).length;
+    const done=b.tasks.filter(t=>!t.optional && isDone(t.id)).length;
+    const complete = total>0 && done===total;
+    const row=el('div','dprow'+(b.id===curId?' cur':'')+(complete?' done':''));
+    row.appendChild(el('div','dptime', fmtMin(b.start)+' – '+fmtMin(b.end)));
+    row.appendChild(el('div','dpname', (complete?'✅ ':'')+b.ico+' '+b.name));
+    if(b.id===curId) row.appendChild(el('div','dpnow','NOW'));
+    else row.appendChild(el('div','dpstat', total? done+'/'+total : ''));
+    list.appendChild(row);
+  });
+}
+function enterPlanner(){ $('#deskplanner').classList.add('on'); requestWakeLock(); renderDeskPlanner(); }
+function exitPlanner(){ $('#deskplanner').classList.remove('on'); }
 function missedList(){
   const m=nowMin(); const out=[];
   for(const b of BLOCKS){ if(m>=b.end){ for(const t of b.tasks){ if(!t.optional && !isDone(t.id)) out.push(t.label); } } }
@@ -814,7 +924,11 @@ function bind(){
   $('#snoozeBtn').onclick=()=>{ alarm.snoozeUntil=Date.now()+SNOOZE_MS; if(alarm.test) alarm.test=false; stopAlarm(); toast('Snoozed 9 min'); };
   $('#upBtn').onclick=()=>{ alarm.test=false; stopAlarm(); if(!isDone('wake-up')){ setDone('wake-up',true); } render(); toast('Good morning! ☀️'); };
   $('#remOk').onclick=()=>$('#remOverlay').classList.remove('on');
+  $('#sessDismiss').onclick=()=>$('#sessionOverlay').classList.remove('on');
+  $('#sessGo').onclick=()=>{ $('#sessionOverlay').classList.remove('on'); exitPlanner(); ui.selectedBlock=null; showScreen('main'); render(); };
   $('#deskExit').onclick=exitDesk;
+  $('#planBtn').onclick=enterPlanner;
+  $('#planExit').onclick=exitPlanner;
   $('#reportBtn').onclick=()=>showScreen('report');
   $('#reportBack').onclick=()=>showScreen('main');
   $('#settingsBtn').onclick=()=>showScreen('settings');
@@ -859,6 +973,7 @@ function tick(){
   const cur=blockAt(nowMin()).id;
   if(cur!==window._lastCur && ui.screen==='main' && !ui.selectedBlock){ window._lastCur=cur; render(); }
   renderDesk();
+  if($('#deskplanner').classList.contains('on')) renderDeskPlanner();
 }
 
 /* ============================ INIT ============================ */
