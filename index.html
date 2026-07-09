@@ -99,6 +99,11 @@
   .leetrow:active{background:var(--card2);}
   .leetrow .lt{font-size:16px; font-weight:600;}
   .leetrow .lg{font-size:12px; color:var(--muted); margin-top:2px;}
+  .histrow{display:flex; align-items:center; gap:14px; padding:13px 6px; border-bottom:1px solid var(--line); cursor:pointer;}
+  .histrow:last-child{border-bottom:none;}
+  .histrow:active{background:var(--card2);}
+  .histrow .ht{font-size:15px; font-weight:600;}
+  .histrow .hpct{font-size:19px; font-weight:800; color:var(--accent);}
   .bar{height:8px; background:var(--card2); border-radius:999px; overflow:hidden; flex:1;}
   .bar>i{display:block; height:100%; background:var(--accent2);}
 
@@ -258,6 +263,7 @@
         <div class="pill" id="wlPill" title="screen wake lock">screen</div>
         <button class="iconbtn" id="planBtn" title="Desk view (large font)">🖥️</button>
         <button class="iconbtn" id="reportBtn" title="Report">📊</button>
+        <button class="iconbtn" id="historyBtn" title="History">🗓️</button>
         <button class="iconbtn" id="settingsBtn" title="Settings">⚙️</button>
       </div>
     </div>
@@ -292,10 +298,19 @@
   <!-- REPORT SCREEN -->
   <div class="screen" id="reportScreen">
     <div class="topbar">
-      <h2>📊 Today's report</h2>
+      <h2 id="reportTitle">📊 Today's report</h2>
       <button class="iconbtn" id="reportBack">✕</button>
     </div>
     <div class="card" id="reportBody"></div>
+  </div>
+
+  <!-- HISTORY SCREEN -->
+  <div class="screen" id="historyScreen">
+    <div class="topbar">
+      <h2>🗓️ History</h2>
+      <button class="iconbtn" id="historyBack">✕</button>
+    </div>
+    <div class="card" id="historyBody"></div>
   </div>
 
   <!-- SETTINGS SCREEN -->
@@ -473,6 +488,19 @@ function doneCount(){ const d=today().done; return countableTasks().filter(t=>d[
 function doneCountAll(){ const d=today().done; return Object.keys(d).length; }
 function totalCountable(){ return countableTasks().length; }
 function pctToday(){ const tot=totalCountable(); return tot? Math.round(100*doneCount()/tot):0; }
+// date-aware versions for the History view / past-day reports
+function logFor(dk){ return state.log[dk] || {done:{}}; }
+function doneInDay(dk,id){ const l=state.log[dk]; return !!(l && l.done && l.done[id]); }
+function doneCountForDay(dk){ return countableTasks().filter(t=>doneInDay(dk,t.id)).length; }
+function pctForDay(dk){ const tot=totalCountable(); return tot? Math.round(100*doneCountForDay(dk)/tot):0; }
+function dateLabel(dk){
+  const p=dk.split('-'); const d=new Date(+p[0], (+p[1])-1, +p[2]);
+  const base=d.toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric', year:'numeric'});
+  if(dk===todayKey()) return 'Today · '+base;
+  const y=new Date(); y.setDate(y.getDate()-1);
+  if(dk===todayKey(y)) return 'Yesterday · '+base;
+  return base;
+}
 
 function setDone(id, val){
   const t=today();
@@ -962,34 +990,58 @@ function missedList(){
 
 /* ============================ REPORT ============================ */
 function renderReport(){
+  const dk = ui.reportDate || todayKey();
+  const isToday = dk===todayKey();
+  const L = logFor(dk);
+  $('#reportTitle').textContent = isToday ? "📊 Today's report" : '📅 '+dateLabel(dk);
   const body=$('#reportBody'); body.innerHTML='';
-  const m=nowMin();
-  body.appendChild(el('div','row between',''));
+  const m = isToday ? nowMin() : 1440; // past days: the whole day has elapsed
   const head=el('div'); head.style.marginBottom='12px';
-  head.innerHTML='<div style="font-size:38px;font-weight:800" class="accent">'+doneCount()+' <span style="font-size:18px" class="muted">/ '+totalCountable()+' actions</span></div>'
-    +'<div class="muted">'+pctToday()+'% of today complete · '+state.totalActions+' actions all-time</div>';
+  head.innerHTML='<div style="font-size:38px;font-weight:800" class="accent">'+doneCountForDay(dk)+' <span style="font-size:18px" class="muted">/ '+totalCountable()+' actions</span></div>'
+    +'<div class="muted">'+pctForDay(dk)+'% complete'+(isToday?' so far':'')+' · '+state.totalActions+' actions all-time</div>';
   body.appendChild(head);
   BLOCKS.forEach(b=>{
-    const total=b.tasks.filter(t=>!t.optional).length; if(!total && !b.tasks.length) return;
+    const total=b.tasks.filter(x=>!x.optional).length; if(!total && !b.tasks.length) return;
     const wrap=el('div'); wrap.style.margin='10px 0';
     wrap.appendChild(el('div','muted small', fmtMin(b.start)+' – '+fmtMin(b.end)+' · '+b.ico+' '+b.name));
     b.tasks.forEach(t=>{
-      const done=isDone(t.id);
+      const done=doneInDay(dk,t.id);
       const past=m>=b.end;
       let mark = done? '✅' : (past? '❌' : '⬜');
       const r=el('div','kv');
       r.appendChild(el('span',null, mark+' '+esc(t.label)+(t.optional?' <span class="opt">optional</span>':'')));
       const meta=el('span','muted small'); let mt='';
-      if(t.id==='exercise' && today().exercise){ const o=EXERCISE_OPTIONS.find(x=>x.id===today().exercise); if(o) mt=o.label; }
-      const rt=today().ratings&&today().ratings[t.id];
+      if(t.id==='exercise' && L.exercise){ const o=EXERCISE_OPTIONS.find(x=>x.id===L.exercise); if(o) mt=o.label; }
+      const rt=L.ratings&&L.ratings[t.id];
       if(rt){ mt=(mt?mt+' · ':'')+'⚡ '+rt+'/5'; }
-      if(t.id==='leetcode' && today().leetPick){ mt=(mt?mt+' · ':'')+today().leetPick.title; }
+      if(t.id==='leetcode' && L.leetPick){ mt=(mt?mt+' · ':'')+L.leetPick.title; }
       meta.textContent=mt; r.appendChild(meta);
       wrap.appendChild(r);
-      const nt=today().snotes&&today().snotes[t.id];
+      const nt=L.snotes&&L.snotes[t.id];
       if(nt){ const nr=el('div','muted small'); nr.style.padding='0 0 8px 26px'; nr.textContent='📝 '+nt; wrap.appendChild(nr); }
     });
     body.appendChild(wrap);
+  });
+}
+function renderHistory(){
+  const body=$('#historyBody'); body.innerHTML='';
+  const keys=Array.from(new Set([].concat(Object.keys(state.log), Object.keys(state.history)))).sort().reverse();
+  if(!keys.length){ body.appendChild(el('p','muted','No days recorded yet — check things off and they’ll show up here.')); return; }
+  const tot=totalCountable();
+  keys.forEach(dk=>{
+    const cnt=doneCountForDay(dk), pct=pctForDay(dk);
+    const row=el('div','histrow');
+    const left=el('div'); left.style.flex='1';
+    left.appendChild(el('div','ht', dateLabel(dk)));
+    const track=el('div','bar'); track.style.marginTop='6px'; const fill=el('i'); fill.style.width=pct+'%'; track.appendChild(fill);
+    left.appendChild(track);
+    row.appendChild(left);
+    const right=el('div'); right.style.textAlign='right'; right.style.minWidth='74px';
+    right.appendChild(el('div','hpct', pct+'%'));
+    right.appendChild(el('div','muted small', cnt+'/'+tot+' actions'));
+    row.appendChild(right);
+    row.onclick=()=>{ ui.reportDate=dk; ui.reportFrom='history'; showScreen('report'); };
+    body.appendChild(row);
   });
 }
 
@@ -1009,7 +1061,7 @@ function renderCourseEdit(){
 /* ============================ HELPERS ============================ */
 function esc(s){ return String(s).replace(/[&<>"]/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[x])); }
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),2200); }
-function showScreen(name){ ui.screen=name; ['main','report','settings'].forEach(s=>$('#'+s+'Screen').classList.toggle('on', s===name)); if(name==='report') renderReport(); if(name==='settings') renderCourseEdit(); }
+function showScreen(name){ ui.screen=name; ['main','report','settings','history'].forEach(s=>$('#'+s+'Screen').classList.toggle('on', s===name)); if(name==='report') renderReport(); if(name==='settings') renderCourseEdit(); if(name==='history') renderHistory(); }
 function rollDay(){
   const k=todayKey();
   if(state._day && state._day!==k){
@@ -1035,8 +1087,10 @@ function bind(){
   $('#deskExit').onclick=exitDesk;
   $('#planBtn').onclick=enterPlanner;
   $('#planExit').onclick=exitPlanner;
-  $('#reportBtn').onclick=()=>showScreen('report');
-  $('#reportBack').onclick=()=>showScreen('main');
+  $('#reportBtn').onclick=()=>{ ui.reportDate=todayKey(); ui.reportFrom='main'; showScreen('report'); };
+  $('#reportBack').onclick=()=>showScreen(ui.reportFrom==='history'?'history':'main');
+  $('#historyBtn').onclick=()=>showScreen('history');
+  $('#historyBack').onclick=()=>showScreen('main');
   $('#settingsBtn').onclick=()=>showScreen('settings');
   $('#settingsBack').onclick=()=>{ showScreen('main'); render(); };
   $('#followNow').onclick=()=>{ ui.selectedBlock=null; render(); };
