@@ -99,6 +99,9 @@
   .leetrow:active{background:var(--card2);}
   .leetrow .lt{font-size:16px; font-weight:600;}
   .leetrow .lg{font-size:12px; color:var(--muted); margin-top:2px;}
+  .lbadge{font-size:11px; padding:1px 7px; border-radius:999px; font-weight:700; white-space:nowrap;}
+  .lbadge.solved{background:rgba(52,211,153,.16); color:var(--accent);}
+  .lbadge.retry{background:rgba(251,191,36,.16); color:var(--amber);}
   .histrow{display:flex; align-items:center; gap:14px; padding:13px 6px; border-bottom:1px solid var(--line); cursor:pointer;}
   .histrow:last-child{border-bottom:none;}
   .histrow:active{background:var(--card2);}
@@ -442,6 +445,7 @@ function load(){
   s.log = s.log || {};                       // { dateKey: { done:{id:ts}, ... } }
   s.history = s.history || {};               // { dateKey: {count,total,pct} }
   s.totalActions = s.totalActions || 0;
+  s.leetStatus = s.leetStatus || {};         // { problemKey: 'solved' | 'retry' } — persists across days
   return s;
 }
 function save(){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){} }
@@ -779,6 +783,8 @@ function leetTagText(item){ return Array.isArray(item.tags)&&item.tags.length ? 
 // Two independent LeetCode sessions: morning ('am') and evening ('pm'), each with its own pick + solved state.
 const LEET_SLOTS = { am:{task:'leetcode-am', pick:'leetPickAm'}, pm:{task:'leetcode', pick:'leetPick'} };
 function leetSlotOf(b){ return (b && b.slot) || 'pm'; }
+function leetKey(item){ return (item && (item.url || item.title)) || ''; }         // stable per-problem key
+function setLeetStatus(key, status){ if(!key) return; state.leetStatus[key]=status; save(); } // 'solved' | 'retry'
 function leetView(b){
   const slot=leetSlotOf(b);
   const S=LEET_SLOTS[slot];
@@ -794,12 +800,17 @@ function leetView(b){
     if(pick.description) html+='<div style="margin-bottom:8px">'+esc(pick.description)+'</div>';
     if(pick.example) html+='<div class="muted small" style="font-family:ui-monospace,monospace; white-space:pre-wrap; background:var(--card2); padding:10px; border-radius:10px">'+esc(pick.example)+'</div>';
     wrap.appendChild(el('div',null,html));
+    const key=leetKey(pick);
+    const st=state.leetStatus[key];
+    if(st){ wrap.appendChild(el('div','muted small', st==='solved'?'✅ Marked solved':'🔁 Marked to retry later')); }
     const row=el('div','btnrow');
     const solve=el('button','btn '+(done?'':'primary'), done?'✅ Solved':'I solved it');
-    solve.onclick=()=>{ setDone(S.task, !done); render(); };
+    solve.onclick=()=>{ const nd=!done; setDone(S.task, nd); if(nd) setLeetStatus(key,'solved'); render(); };
+    const retry=el('button','btn ghost','🔁 Couldn\'t solve — retry later');
+    retry.onclick=()=>{ setLeetStatus(key,'retry'); render(); };
     const change=el('button','btn ghost','Change problem');
     change.onclick=()=>openLeetPicker(slot);
-    row.appendChild(solve); row.appendChild(change);
+    row.appendChild(solve); row.appendChild(retry); row.appendChild(change);
     wrap.appendChild(row);
   } else {
     wrap.appendChild(el('p','muted','Pick one problem to focus on this session.'));
@@ -819,11 +830,13 @@ function renderLeetList(q){
   LEETCODE_LIST.forEach(raw=>{
     const item=(typeof raw==='string')?{title:raw}:(raw||{});
     const tags=leetTagText(item);
-    const hay=((item.title||'')+' '+tags+' '+(item.difficulty||'')).toLowerCase();
+    const st=state.leetStatus[leetKey(item)];
+    const hay=((item.title||'')+' '+tags+' '+(item.difficulty||'')+' '+(st||'')).toLowerCase();
     if(q && hay.indexOf(q)<0) return;
     n++;
     const row=el('div','leetrow');
-    row.innerHTML='<div class="lt">'+esc(item.title||'(untitled)')+'</div>'+(tags?'<div class="lg">'+esc(tags)+'</div>':'');
+    const badge = st==='solved' ? ' <span class="lbadge solved">✅ solved</span>' : (st==='retry' ? ' <span class="lbadge retry">🔁 retry</span>' : '');
+    row.innerHTML='<div class="lt">'+esc(item.title||'(untitled)')+badge+'</div>'+(tags?'<div class="lg">'+esc(tags)+'</div>':'');
     row.onclick=()=>pickLeet(item);
     list.appendChild(row);
   });
