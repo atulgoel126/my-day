@@ -321,12 +321,6 @@
     </div>
 
     <div class="card">
-      <h3 style="font-size:15px; margin-bottom:8px">Courses (study queue)</h3>
-      <p class="muted small" style="margin-top:0">Work the top pending course. Mark a session done each study block; ~10 sessions finishes a course, then it advances.</p>
-      <div id="courseEdit"></div>
-    </div>
-
-    <div class="card">
       <h3 style="font-size:15px; margin-bottom:8px">Backup &amp; restore</h3>
       <p class="muted small" style="margin-top:0">Your streak lives in this browser. Export regularly so it can never be lost.</p>
       <div class="btnrow">
@@ -380,8 +374,8 @@ const BLOCKS = [
     {id:'breakfast', label:'Breakfast'},
     {id:'meditate', label:'Meditate', optional:true},
   ]},
-  {id:'study', start:510, end:570, name:'Study — Online course', ico:'📚', kind:'study', tasks:[
-    {id:'study', label:'Course session done'},
+  {id:'leetcode-am', start:510, end:570, name:'LeetCode — morning', ico:'🧩', kind:'leetcode', slot:'am', tasks:[
+    {id:'leetcode-am', label:'Solved at least one question'},
   ]},
   {id:'office1', start:570, end:810, name:'Office work', ico:'💼', kind:'office', tasks:[
     {id:'office-am', label:'Morning office block done'},
@@ -397,7 +391,7 @@ const BLOCKS = [
   {id:'noscreen', start:1050, end:1230, name:'No screen · Desk clock', ico:'🌙', kind:'deskclock', tasks:[
     {id:'no-screen', label:'Stayed off screen'},
   ]},
-  {id:'leetcode', start:1230, end:1290, name:'LeetCode', ico:'🧩', kind:'leetcode', tasks:[
+  {id:'leetcode', start:1230, end:1290, name:'LeetCode — evening', ico:'🧩', kind:'leetcode', slot:'pm', tasks:[
     {id:'leetcode', label:'Solved at least one question'},
   ]},
   {id:'winddown', start:1290, end:1320, name:'Wind down', ico:'🛏️', kind:'winddown', tasks:[
@@ -423,14 +417,6 @@ const REMINDER = {min:1020, id:'noScreenSoon', title:'30 minutes left', body:'No
 
 const WAKE_ALARM_WINDOW = [360, 450]; // audible auto-alarm only within [6:00, 7:30)
 
-const DEFAULT_COURSES = [
-  {name:'Course 1', total:10, days:0, done:false},
-  {name:'Course 2', total:10, days:0, done:false},
-  {name:'Course 3', total:10, days:0, done:false},
-  {name:'Course 4', total:10, days:0, done:false},
-  {name:'Course 5', total:10, days:0, done:false},
-];
-
 // Loaded from leetcode.json at startup; this is the offline fallback. Edit leetcode.json to change the list.
 let LEETCODE_LIST = [
   {title:'Two Sum', difficulty:'Easy', topic:'Array / Hash', url:'https://leetcode.com/problems/two-sum/'},
@@ -455,7 +441,6 @@ function load(){
   if(!s) s={};
   s.log = s.log || {};                       // { dateKey: { done:{id:ts}, ... } }
   s.history = s.history || {};               // { dateKey: {count,total,pct} }
-  s.courses = s.courses || JSON.parse(JSON.stringify(DEFAULT_COURSES));
   s.totalActions = s.totalActions || 0;
   return s;
 }
@@ -527,31 +512,8 @@ function streak(){
   return s;
 }
 
-/* course helpers */
-function topCourse(){ return state.courses.find(c=>!c.done) || null; }
-function studyDoneToday(){ return isDone('study'); }
-function markStudy(rating){
-  if(studyDoneToday()) return;
-  const idx=state.courses.findIndex(c=>!c.done); if(idx<0) return;
-  const c=state.courses[idx];
-  c.days++; if(c.days>=c.total) c.done=true;
-  const t=today(); t.studyIdx=idx;
-  if(rating){ t.ratings=t.ratings||{}; t.ratings['study']=rating; }
-  setDone('study', true);
-  render();
-}
-function unmarkStudy(){
-  const t=today();
-  if(t.studyIdx!=null && state.courses[t.studyIdx]){
-    const c=state.courses[t.studyIdx]; c.done=false; c.days=Math.max(0,c.days-1); delete t.studyIdx;
-  }
-  if(t.ratings) delete t.ratings['study'];
-  setDone('study', false);
-  render();
-}
 function setRating(taskId,n){ const t=today(); t.ratings=t.ratings||{}; t.ratings[taskId]=n; if(!isDone(taskId)){ setDone(taskId,true); } else { save(); } render(); }
 function clearSession(taskId){ const t=today(); if(t.ratings) delete t.ratings[taskId]; setDone(taskId,false); render(); }
-function leetDoneToday(){ return isDone('leetcode'); }
 
 /* ============================ AUDIO / ALARM ============================ */
 function ensureAudio(){
@@ -656,9 +618,7 @@ function buildReview(){
     const chk=el('button','check', isDone(t.id)?'✓':''); row.appendChild(chk);
     const lab=el('div','label'); lab.textContent=t.label; if(t.optional) lab.appendChild(el('span','opt','optional')); row.appendChild(lab);
     row.onclick=()=>{
-      const id=t.id, nd=!isDone(id);
-      if(id==='study'){ if(nd) markStudy(); else unmarkStudy(); }
-      else setDone(id, nd);
+      setDone(t.id, !isDone(t.id));
       buildReview(); render();
     };
     review.appendChild(row);
@@ -736,9 +696,8 @@ function renderActive(){
 
   // special views
   if(b.kind==='exercise'){ card.appendChild(exerciseView()); }
-  else if(b.kind==='study'){ card.appendChild(studyView()); }
   else if(b.kind==='office'){ card.appendChild(officeView(b, b.tasks[0].id)); }
-  else if(b.kind==='leetcode'){ card.appendChild(leetView()); }
+  else if(b.kind==='leetcode'){ card.appendChild(leetView(b)); }
   else if(b.kind==='deskclock'){ card.appendChild(deskPromptView()); }
   else if(b.kind==='winddown'){ b.tasks.forEach(t=>card.appendChild(taskRow(t))); card.appendChild(mealsView()); }
   else { b.tasks.forEach(t=>card.appendChild(taskRow(t))); }
@@ -810,28 +769,6 @@ function ratingPanel(taskId, opts){
   if(done && opts.onUndo){ const u=el('button','btn ghost small','Undo session'); u.style.marginTop='10px'; u.onclick=opts.onUndo; wrap.appendChild(u); }
   return wrap;
 }
-function studyView(){
-  const wrap=el('div');
-  const done=studyDoneToday();
-  const t=today();
-  const c = (done && t.studyIdx!=null) ? state.courses[t.studyIdx] : topCourse();
-  if(!c){ wrap.appendChild(el('p','accent','🎉 All courses complete! Add more in ⚙️ Settings.')); }
-  else {
-    wrap.appendChild(el('div',null,'<b>'+(done?'Studied':'Now studying')+':</b> '+esc(c.name)));
-    const bar=el('div','row'); bar.style.margin='12px 0';
-    const track=el('div','bar'); const fill=el('i'); fill.style.width=Math.round(100*Math.min(c.days,c.total)/c.total)+'%'; track.appendChild(fill);
-    bar.appendChild(track);
-    bar.appendChild(el('div','small muted','Day '+Math.min(c.days,c.total)+' / '+c.total));
-    wrap.appendChild(bar);
-    const pend=state.courses.filter(x=>!x.done).length;
-    wrap.appendChild(el('div','muted small', pend+' course'+(pend===1?'':'s')+' pending in your queue.'));
-  }
-  wrap.appendChild(ratingPanel('study', {
-    onPick:(n)=>{ if(!studyDoneToday()) markStudy(n); else setRating('study',n); },
-    onUndo:unmarkStudy,
-  }));
-  return wrap;
-}
 function officeView(block, taskId){
   const wrap=el('div');
   wrap.appendChild(ratingPanel(taskId, { onPick:(n)=>setRating(taskId,n), onUndo:()=>clearSession(taskId) }));
@@ -839,36 +776,41 @@ function officeView(block, taskId){
 }
 
 function leetTagText(item){ return Array.isArray(item.tags)&&item.tags.length ? item.tags.join(' · ') : (item.topic||''); }
-function leetView(){
+// Two independent LeetCode sessions: morning ('am') and evening ('pm'), each with its own pick + solved state.
+const LEET_SLOTS = { am:{task:'leetcode-am', pick:'leetPickAm'}, pm:{task:'leetcode', pick:'leetPick'} };
+function leetSlotOf(b){ return (b && b.slot) || 'pm'; }
+function leetView(b){
+  const slot=leetSlotOf(b);
+  const S=LEET_SLOTS[slot];
   const wrap=el('div');
-  const pick=today().leetPick;
+  const pick=today()[S.pick];
   if(pick){
-    const done=leetDoneToday();
+    const done=isDone(S.task);
     const tags=leetTagText(pick);
     const link = pick.url ? '<a href="'+esc(pick.url)+'" target="_blank" rel="noopener" style="color:var(--accent2)">'+esc(pick.title)+' ↗</a>' : esc(pick.title);
-    let html='<div class="muted small">Today\'s problem</div>'
+    let html='<div class="muted small">This session\'s problem</div>'
       +'<div style="font-size:19px;font-weight:700;margin:2px 0">🧩 '+link+'</div>';
     if(tags) html+='<div class="muted small" style="margin-bottom:8px">'+esc(tags)+'</div>';
     if(pick.description) html+='<div style="margin-bottom:8px">'+esc(pick.description)+'</div>';
     if(pick.example) html+='<div class="muted small" style="font-family:ui-monospace,monospace; white-space:pre-wrap; background:var(--card2); padding:10px; border-radius:10px">'+esc(pick.example)+'</div>';
     wrap.appendChild(el('div',null,html));
     const row=el('div','btnrow');
-    const solve=el('button','btn '+(done?'':'primary'), done?'✅ Solved today':'I solved it');
-    solve.onclick=()=>{ setDone('leetcode', !done); render(); };
+    const solve=el('button','btn '+(done?'':'primary'), done?'✅ Solved':'I solved it');
+    solve.onclick=()=>{ setDone(S.task, !done); render(); };
     const change=el('button','btn ghost','Change problem');
-    change.onclick=openLeetPicker;
+    change.onclick=()=>openLeetPicker(slot);
     row.appendChild(solve); row.appendChild(change);
     wrap.appendChild(row);
   } else {
     wrap.appendChild(el('p','muted','Pick one problem to focus on this session.'));
-    const btn=el('button','btn primary full','🎯 Pick today\'s problem');
-    btn.onclick=openLeetPicker;
+    const btn=el('button','btn primary full','🎯 Pick this session\'s problem');
+    btn.onclick=()=>openLeetPicker(slot);
     wrap.appendChild(btn);
     wrap.appendChild(el('div','muted small',(LEETCODE_LIST.length||0)+' problems in your list'));
   }
   return wrap;
 }
-function openLeetPicker(){ renderLeetList(''); $('#leetSearch').value=''; $('#leetPicker').classList.add('on'); setTimeout(()=>{try{$('#leetSearch').focus();}catch(e){}},60); }
+function openLeetPicker(slot){ ui.leetSlot=slot||'pm'; renderLeetList(''); $('#leetSearch').value=''; $('#leetPicker').classList.add('on'); setTimeout(()=>{try{$('#leetSearch').focus();}catch(e){}},60); }
 function closeLeetPicker(){ $('#leetPicker').classList.remove('on'); }
 function renderLeetList(q){
   q=(q||'').toLowerCase().trim();
@@ -888,7 +830,8 @@ function renderLeetList(q){
   $('#leetCount').textContent = n+' of '+LEETCODE_LIST.length+' shown';
 }
 function pickLeet(item){
-  today().leetPick={title:item.title, url:item.url, tags:item.tags, description:item.description, example:item.example};
+  const S=LEET_SLOTS[ui.leetSlot||'pm'];
+  today()[S.pick]={title:item.title, url:item.url, tags:item.tags, description:item.description, example:item.example};
   save(); closeLeetPicker(); render();
 }
 function leetRandom(){ if(!LEETCODE_LIST.length) return; const raw=LEETCODE_LIST[Math.floor(Math.random()*LEETCODE_LIST.length)]; pickLeet((typeof raw==='string')?{title:raw}:raw); }
@@ -1015,6 +958,7 @@ function renderReport(){
       const rt=L.ratings&&L.ratings[t.id];
       if(rt){ mt=(mt?mt+' · ':'')+'⚡ '+rt+'/5'; }
       if(t.id==='leetcode' && L.leetPick){ mt=(mt?mt+' · ':'')+L.leetPick.title; }
+      if(t.id==='leetcode-am' && L.leetPickAm){ mt=(mt?mt+' · ':'')+L.leetPickAm.title; }
       meta.textContent=mt; r.appendChild(meta);
       wrap.appendChild(r);
       const nt=L.snotes&&L.snotes[t.id];
@@ -1046,22 +990,10 @@ function renderHistory(){
 }
 
 /* ============================ SETTINGS ============================ */
-function renderCourseEdit(){
-  const c=$('#courseEdit'); c.innerHTML='';
-  state.courses.forEach((co,i)=>{
-    const row=el('div','courseitem');
-    const inp=el('input'); inp.type='text'; inp.value=co.name; inp.style.flex='1';
-    inp.oninput=()=>{ co.name=inp.value; save(); };
-    row.appendChild(inp);
-    row.appendChild(el('div','small muted', co.done?'done':('day '+co.days+'/'+co.total)));
-    c.appendChild(row);
-  });
-}
-
 /* ============================ HELPERS ============================ */
 function esc(s){ return String(s).replace(/[&<>"]/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[x])); }
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),2200); }
-function showScreen(name){ ui.screen=name; ['main','report','settings','history'].forEach(s=>$('#'+s+'Screen').classList.toggle('on', s===name)); if(name==='report') renderReport(); if(name==='settings') renderCourseEdit(); if(name==='history') renderHistory(); }
+function showScreen(name){ ui.screen=name; ['main','report','settings','history'].forEach(s=>$('#'+s+'Screen').classList.toggle('on', s===name)); if(name==='report') renderReport(); if(name==='history') renderHistory(); }
 function rollDay(){
   const k=todayKey();
   if(state._day && state._day!==k){
@@ -1141,7 +1073,7 @@ function loadLeetcode(){
   if(typeof fetch!=='function') return;
   fetch('leetcode.json',{cache:'no-store'})
     .then(r=> r.ok ? r.json() : null)
-    .then(list=>{ if(Array.isArray(list) && list.length){ LEETCODE_LIST=list; const b=blockAt(nowMin()); if(b.kind==='leetcode' || ui.selectedBlock==='leetcode') render(); } })
+    .then(list=>{ if(Array.isArray(list) && list.length){ LEETCODE_LIST=list; render(); } })
     .catch(()=>{});
 }
 bind();
